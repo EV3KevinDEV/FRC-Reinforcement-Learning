@@ -2,6 +2,7 @@
 using Games.Reefscape.FieldScripts;
 using Games.Reefscape.Scoring;
 using GameSystems.Management;
+using MoSimCore;
 using MoSimCore.BaseClasses.GameManagement;
 using MoSimCore.Enums;
 using MoSimCore.SceneTransitions;
@@ -48,6 +49,11 @@ namespace Games.Reefscape.GameManagement
         {
             if (gameState == GameState.Endgame)
             {
+                if (RlRuntimeSettings.Enabled)
+                {
+                    return;
+                }
+
                 if (_bargeLightController == null)
                 {
                     Debug.LogError("BargeLightController component is missing.");
@@ -59,7 +65,10 @@ namespace Games.Reefscape.GameManagement
 
         protected override IEnumerator PerformGameSpecificReset()
         {
-            SceneManager.Instance.PlayTransition("CrossFade");
+            if (!RlRuntimeSettings.Enabled)
+            {
+                SceneManager.Instance.PlayTransition("CrossFade");
+            }
             
             _scoreHandler.Reset();
 

@@ -161,6 +161,7 @@ namespace Games.Reefscape.Robots
 
             align = gameObject.GetComponent<ReefscapeAutoAlign>();
             preAligned = false;
+
         }
 
         private void LateUpdate()
@@ -261,7 +262,7 @@ namespace Games.Reefscape.Robots
                     
                     break;
                 case ReefscapeSetpoints.Place:
-                    if (OuttakeAction.triggered)
+                    if (IsPlacePressed())
                     {
                         if (coralController.HasPiece() && algaeController.HasPiece())
                         {
@@ -297,7 +298,7 @@ namespace Games.Reefscape.Robots
                 case ReefscapeSetpoints.LowAlgae:
                     SetSetpoint(lowAlgaeSetpoint);
                     var canIntakeAlgaeLow = algaeController.currentStateNum == 0 &&
-                                           IntakeAction.IsPressed();
+                                           IsIntakePressed();
                     coralController.RequestIntake(coralIntake, false);
                     algaeController.RequestIntake(algaeIntake, canIntakeAlgaeLow);
                     break;
@@ -309,7 +310,7 @@ namespace Games.Reefscape.Robots
                 case ReefscapeSetpoints.HighAlgae:
                     SetSetpoint(highAlgaeSetpoint);
                     var canIntakeAlgaeHigh = algaeController.currentStateNum == 0 &&
-                                             IntakeAction.IsPressed();
+                                             IsIntakePressed();
                     coralController.RequestIntake(coralIntake, false);
                     algaeController.RequestIntake(algaeIntake, canIntakeAlgaeHigh);
                     break;
@@ -331,7 +332,7 @@ namespace Games.Reefscape.Robots
                 case ReefscapeSetpoints.Stack:
                     SetSetpoint(stackAlgaeIntakeSetpoint);
                     var canIntakeAlgaeStack = algaeController.currentStateNum == 0 &&
-                                             IntakeAction.IsPressed();
+                                             IsIntakePressed();
                     algaeController.RequestIntake(algaeIntake, canIntakeAlgaeStack);
                     break;
                 case ReefscapeSetpoints.RobotSpecial:
@@ -408,6 +409,14 @@ namespace Games.Reefscape.Robots
 
         private void CheckStationMode()
         {
+            if (ExternalControlEnabled)
+            {
+                StationMode = ExternalStationMode;
+                CurrentCoralStationMode.DropType = StationMode ? DropType.Station : DropType.Ground;
+                _robotSpectialPressed = false;
+                return;
+            }
+
             if (RobotSpecialAction.IsPressed() && !_robotSpectialPressed && BaseGameManager.Instance.RobotState == RobotState.Enabled && (!coralController.HasPiece() || coralController.currentStateNum >= midwayHandoffState.stateNum))
             {
                 StationMode = !StationMode;
@@ -486,7 +495,7 @@ namespace Games.Reefscape.Robots
 
             if (!_isScoring)
             {
-                if (IntakeAction.IsPressed())
+                if (IsIntakePressed())
                 {
                     // SWAPPED DIRECTION: Algae is now 1f, Coral is now -1f
                     float direction = (CurrentRobotMode == ReefscapeRobotMode.Algae) ? 1f : -1f;
@@ -598,12 +607,12 @@ namespace Games.Reefscape.Robots
                 return;
             }
 
-            if ((IntakeAction.IsPressed() || OuttakeAction.IsPressed() || CurrentSetpoint is ReefscapeSetpoints.Climb) &&
+            if ((IsIntakePressed() || IsPlacePressed() || CurrentSetpoint is ReefscapeSetpoints.Climb) &&
                 !intakeAudioSource.isPlaying)
             {
                 intakeAudioSource.Play();
             }
-            else if (!IntakeAction.IsPressed() && !OuttakeAction.IsPressed() && CurrentSetpoint is not ReefscapeSetpoints.Climb &&
+            else if (!IsIntakePressed() && !IsPlacePressed() && CurrentSetpoint is not ReefscapeSetpoints.Climb &&
                      intakeAudioSource.isPlaying)
             {
                 intakeAudioSource.Stop();
@@ -617,6 +626,83 @@ namespace Games.Reefscape.Robots
             {
                 algaeAudioSource.Stop();
             }
+        }
+
+        public float RlArmAngle => armJoint != null
+            ? Mathf.DeltaAngle(0f, armJoint.GetSingleAxisAngle(JointAxis.X))
+            : 0f;
+
+        public float RlElevatorHeight => elevator != null ? elevator.GetElevatorHeight() : 0f;
+
+        public float RlIntakeAngle => intakeJoint != null
+            ? Mathf.DeltaAngle(0f, intakeJoint.GetSingleAxisAngle(JointAxis.X))
+            : 0f;
+
+        public float RlAlgaeArmsAngle => algaeArmsJoint != null
+            ? Mathf.DeltaAngle(0f, algaeArmsJoint.GetSingleAxisAngle(JointAxis.X))
+            : 0f;
+
+        public bool RlStationMode => StationMode;
+
+        public override bool PrepareRlGroundPickupTest()
+        {
+            if (coralController == null || coralIntake == null || !coralController.controller)
+            {
+                return false;
+            }
+
+            // Retain the actual preload object, release it through the same game
+            // piece controller used for scoring, then put it inside the production
+            // ground-intake volume. The test therefore validates overlap detection,
+            // MoveBreakable, handoff, and possession rather than injecting state.
+            var coral = coralController.controller.gameObject;
+            if (!coralController.ReleaseGamePieceWithForce(
+                    Vector3.zero,
+                    ForceMode.VelocityChange,
+                    false))
+            {
+                return false;
+            }
+
+            var intakeColliders = coralIntake.GetComponentsInChildren<BoxCollider>(true);
+            if (intakeColliders.Length == 0)
+            {
+                return false;
+            }
+
+            var intakeVolume = Array.Find(intakeColliders, collider => collider.isTrigger) ?? intakeColliders[0];
+            coral.transform.SetPositionAndRotation(intakeVolume.bounds.center, intakeVolume.transform.rotation);
+            if (coral.TryGetComponent<Rigidbody>(out var coralBody))
+            {
+                coralBody.velocity = Vector3.zero;
+                coralBody.angularVelocity = Vector3.zero;
+                coralBody.WakeUp();
+            }
+            Physics.SyncTransforms();
+            return true;
+        }
+
+        public override bool PrepareRlEmptyStart()
+        {
+            if (coralController == null)
+            {
+                return false;
+            }
+            if (!coralController.controller)
+            {
+                return true;
+            }
+
+            var coral = coralController.controller.gameObject;
+            if (!coralController.ReleaseGamePieceWithForce(
+                    Vector3.zero,
+                    ForceMode.VelocityChange,
+                    false))
+            {
+                return false;
+            }
+            Destroy(coral);
+            return true;
         }
     }
 

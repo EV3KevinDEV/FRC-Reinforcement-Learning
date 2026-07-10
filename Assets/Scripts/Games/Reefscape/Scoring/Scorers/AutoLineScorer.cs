@@ -84,7 +84,7 @@ namespace Games.Reefscape.Scoring.Scorers
                 // During non-Auto periods, only persist if already scored
                 if (_hasAlreadyScored)
                 {
-                    reefscapeData.LeavePoints = 3;
+                    reefscapeData.LeavePoints = ReefscapeOfficialScoring.Leave;
                 }
                 return;
             }
@@ -110,13 +110,13 @@ namespace Games.Reefscape.Scoring.Scorers
             if (!_hasAlreadyScored && _hasBeenInStartZone && !robotInZone)
             {
                 _hasAlreadyScored = true;
-                reefscapeData.LeavePoints = 3;
+                reefscapeData.LeavePoints = ReefscapeOfficialScoring.Leave;
             }
             
             // Persist points during Auto once awarded
             if (_hasAlreadyScored)
             {
-                reefscapeData.LeavePoints = 3;
+                reefscapeData.LeavePoints = ReefscapeOfficialScoring.Leave;
             }
         }
 

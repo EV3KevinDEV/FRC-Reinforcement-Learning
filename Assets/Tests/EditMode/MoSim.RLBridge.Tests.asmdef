@@ -1,0 +1,22 @@
+{
+    "name": "MoSim.RLBridge.Tests",
+    "rootNamespace": "MoSimRL.Tests",
+    "references": [
+        "MoSim.RLBridge",
+        "Reefscape",
+        "RobotFramework"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

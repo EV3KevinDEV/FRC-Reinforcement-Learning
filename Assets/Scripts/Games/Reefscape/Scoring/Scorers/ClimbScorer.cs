@@ -159,25 +159,25 @@ namespace Games.Reefscape.Scoring.Scorers
                     finalScoreAdded = 0;
                     if (ScoringTriggered && !_driveController.IsTouchingGround)
                     {
-                        reefscapeData.ClimbPoints += 12;
-                        finalScoreAdded = 12;
+                        reefscapeData.ClimbPoints += ReefscapeOfficialScoring.DeepCage;
+                        finalScoreAdded = ReefscapeOfficialScoring.DeepCage;
                     }
                     else
                     {
-                        reefscapeData.ParkPoints += 2;
-                        finalScoreAdded = 2;
+                        reefscapeData.ParkPoints += ReefscapeOfficialScoring.Park;
+                        finalScoreAdded = ReefscapeOfficialScoring.Park;
                     }
                 } 
                 else if (gameState == GameState.End)
                 {
                     // Carry over the logic from the final endgame state to the final scoreboard
-                    if (Mathf.Approximately(finalScoreAdded, 2))
+                    if (Mathf.Approximately(finalScoreAdded, ReefscapeOfficialScoring.Park))
                     {
-                        reefscapeData.ParkPoints += 2;
+                        reefscapeData.ParkPoints += ReefscapeOfficialScoring.Park;
                     } 
-                    else if (Mathf.Approximately(finalScoreAdded, 12))
+                    else if (Mathf.Approximately(finalScoreAdded, ReefscapeOfficialScoring.DeepCage))
                     {
-                        reefscapeData.ClimbPoints += 12;
+                        reefscapeData.ClimbPoints += ReefscapeOfficialScoring.DeepCage;
                     }
                 }
             }

@@ -208,7 +208,15 @@ namespace RobotFramework.Controllers.Drivetrain
                 fwd = 0;
                 str = 0;
                 rotation = 0;
-            } else if (overideActive) 
+            }
+            else if (_robotBase.ExternalControlEnabled)
+            {
+                var translation = _robotBase.ReadTranslationInput();
+                fwd = translation.x;
+                str = translation.y;
+                rotation = _robotBase.ReadRotationInput() * steerMultiplier * rotationSpeedMultiplier;
+            }
+            else if (overideActive)
             {
                 overideActive = false;
             }

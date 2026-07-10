@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mosim-rl"
+version = "0.1.0"
+description = "Gymnasium and Stable-Baselines3 bridge for MoSimulator Reefscape"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { text = "GPL-3.0-only" }
+dependencies = [
+  "gymnasium==1.3.0",
+  "numpy>=2.0,<3",
+  "pygame-ce==2.5.7",
+  "psutil>=6.0",
+  "PyYAML>=6.0",
+  "stable-baselines3==2.9.0",
+  "tensorboard>=2.18",
+  "torch==2.12.0",
+  "tqdm>=4.67",
+  "rich>=13.9",
+  "wandb==0.28.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.3",
+  "pytest-timeout>=2.3",
+]
+
+[project.scripts]
+mosim-train = "mosim_rl.train:main"
+mosim-evaluate = "mosim_rl.evaluate:main"
+mosim-random = "mosim_rl.random_rollout:main"
+mosim-gamepad = "mosim_rl.gamepad_rollout:main"
+mosim-benchmark = "mosim_rl.benchmark:main"
+mosim-soak = "mosim_rl.soak:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+  "integration: requires a built Unity player",
+]

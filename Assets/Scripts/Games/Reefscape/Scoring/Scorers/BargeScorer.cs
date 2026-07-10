@@ -94,7 +94,7 @@ namespace Games.Reefscape.Scoring.Scorers
             if (scoreData is ReefscapeScoreData reefscapeScoreData)
             {
                 // Add the total points based on counted algae
-                reefscapeScoreData.NetPoints += _algaeCount * 4;
+                reefscapeScoreData.NetPoints += _algaeCount * ReefscapeOfficialScoring.Net;
                 reefscapeScoreData.AlgaeScored += _algaeCount;
             }
             else

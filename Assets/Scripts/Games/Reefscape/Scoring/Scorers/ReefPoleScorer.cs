@@ -122,9 +122,15 @@ namespace Games.Reefscape.Scoring.Scorers
 
                 var val = branch.TargetHeight switch
                 {
-                    ReefscapeBranchHeight.L4 => branch.ScoredInAuto ? 7 : 5,
-                    ReefscapeBranchHeight.L3 => branch.ScoredInAuto ? 6 : 4,
-                    ReefscapeBranchHeight.L2 => branch.ScoredInAuto ? 4 : 3,
+                    ReefscapeBranchHeight.L4 => branch.ScoredInAuto
+                        ? ReefscapeOfficialScoring.AutoL4
+                        : ReefscapeOfficialScoring.TeleopL4,
+                    ReefscapeBranchHeight.L3 => branch.ScoredInAuto
+                        ? ReefscapeOfficialScoring.AutoL3
+                        : ReefscapeOfficialScoring.TeleopL3,
+                    ReefscapeBranchHeight.L2 => branch.ScoredInAuto
+                        ? ReefscapeOfficialScoring.AutoL2
+                        : ReefscapeOfficialScoring.TeleopL2,
                     _ => 0
                 };
 

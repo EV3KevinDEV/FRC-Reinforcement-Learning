@@ -46,6 +46,8 @@ ExportedObj/
 *.mdb
 *.opendb
 *.VC.db
+/.vscode/browse.vc.db*
+/.vscode/c_cpp_properties.json
 
 # Unity3D generated meta files
 *.pidb.meta
@@ -67,11 +69,12 @@ crashlytics-build.properties
 
 # Packed Addressables
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+/Assets/AddressableAssetsData/link.xml
+/Assets/AddressableAssetsData/link.xml.meta
 
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
-Assets/Prefabs/Reefscape/Robots/Spectrum.prefab
 Assets/Prefabs/Reefscape/Robots/Spectrum.prefab
 /.idea
 /_Build
@@ -79,3 +82,12 @@ Assets/Prefabs/Reefscape/Robots/Spectrum.prefab
 StandaloneWindows64/robonautsmod_assets_all_5774bae440d1954dc02e1305d3e24445.bundle
 Mods/Robonauts/Build/robonautsmod_assets_all_5774bae440d1954dc02e1305d3e24445.bundle
 /_BuildIL2cpp
+
+# MoSimulator RL generated artifacts
+/runs/
+/.pytest_cache/
+/python/.pytest_cache/
+/python/src/*.egg-info/
+/python/src/**/__pycache__/
+/python/tests/**/__pycache__/
+*.pyc

@@ -28,9 +28,31 @@ namespace Games.Reefscape.Robots
         public InputAction IntakeModeToggleAction { get; private set; }
         public InputAction RobotSpecialAction { get; private set; }
 
-        [field: SerializeField] public ReefscapeSetpoints CurrentSetpoint { get; private set; }
+        [field: SerializeField] public ReefscapeSetpoints CurrentSetpoint { get; protected set; }
         protected ReefscapeSetpoints LastSetpoint { get; private set; }
-        public bool IsIntaking => IntakeAction.IsPressed();
+        public bool IsIntaking => IsIntakePressed();
+
+        public bool HasCoral => RobotGamePieceController != null &&
+                                RobotGamePieceController.GetPieceByName("Coral")?.currentStateNum > 0;
+
+        public int CoralState => RobotGamePieceController != null
+            ? RobotGamePieceController.GetPieceByName("Coral")?.currentStateNum ?? 0
+            : 0;
+
+        public bool AddRlCoralPreload() => RobotGamePieceController != null &&
+                                           RobotGamePieceController.AddPreload();
+
+        /// <summary>
+        /// Optional deterministic fixture used by the RL integration test. Robot
+        /// implementations place a real released coral in their normal ground
+        /// intake; acquisition still goes through the production intake system.
+        /// </summary>
+        public virtual bool PrepareRlGroundPickupTest() => false;
+
+        /// <summary>Remove the normal preload for manual empty-robot testing.</summary>
+        public virtual bool PrepareRlEmptyStart() => false;
+
+        public bool ExternalStationMode => ExternalControlEnabled && ExternalCommand.StationMode;
 
         public ReefscapeRobotMode CurrentRobotMode { get; private set; }
         public ReefscapeIntakeMode CurrentIntakeMode { get; private set; }
@@ -100,6 +122,12 @@ namespace Games.Reefscape.Robots
         protected override void Update()
         {
             base.Update();
+
+            if (ExternalControlEnabled)
+            {
+                ApplyExternalControl();
+                return;
+            }
 
             if (RobotModeToggleAction.triggered && !RightStickModifierAction.IsPressed())
             {
@@ -248,6 +276,50 @@ namespace Games.Reefscape.Robots
             HandleRumble();
         }
 
+        private void ApplyExternalControl()
+        {
+            CurrentRobotMode = ReefscapeRobotMode.Coral;
+            CurrentIntakeMode = ReefscapeIntakeMode.Normal;
+
+            if (CurrentCoralStationMode != null)
+            {
+                CurrentCoralStationMode.DropType =
+                    BaseGameManager.Instance.GameState != GameState.Auto && ExternalCommand.StationMode
+                        ? DropType.Station
+                        : DropType.Ground;
+            }
+
+            if (IsPlacePressed())
+            {
+                if (CurrentSetpoint != ReefscapeSetpoints.Place)
+                {
+                    SetState(ReefscapeSetpoints.Place);
+                }
+                return;
+            }
+
+            var desiredSetpoint = ExternalCommand.TargetSetpoint switch
+            {
+                0 => ReefscapeSetpoints.Stow,
+                1 => ReefscapeSetpoints.Intake,
+                2 => ReefscapeSetpoints.L1,
+                3 => ReefscapeSetpoints.L2,
+                4 => ReefscapeSetpoints.L3,
+                5 => ReefscapeSetpoints.L4,
+                _ => ReefscapeSetpoints.Stow
+            };
+
+            if (desiredSetpoint is ReefscapeSetpoints.L2 or ReefscapeSetpoints.L3 or ReefscapeSetpoints.L4)
+            {
+                CheckFacingReef();
+            }
+
+            if (CurrentSetpoint != desiredSetpoint)
+            {
+                SetState(desiredSetpoint);
+            }
+        }
+
         protected void SetState(ReefscapeSetpoints setpoint)
         {
             LastSetpoint = CurrentSetpoint;
@@ -261,6 +333,10 @@ namespace Games.Reefscape.Robots
 
         private void CheckFacingReef()
         {
+            if (_targetReef == null)
+            {
+                return;
+            }
             var toReefVector = (_targetReef.transform.position - transform.position).normalized;
             var robotForwardVector = transform.forward.normalized;
             var angle = Vector3.Dot(robotForwardVector, toReefVector);

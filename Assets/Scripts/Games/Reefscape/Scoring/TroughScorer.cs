@@ -91,12 +91,12 @@ namespace Games.Reefscape.Scoring
                 if (scoredInAuto.Contains(go))
                 {
                     stillScored.Add(go);
-                    reefscapeData.CoralPoints += 3;
+                    reefscapeData.TroughPoints += ReefscapeOfficialScoring.AutoL1;
                     reefscapeData.CoralScored += 1;
                 }
                 else
                 {
-                    reefscapeData.CoralPoints += 2;
+                    reefscapeData.TroughPoints += ReefscapeOfficialScoring.TeleopL1;
                     reefscapeData.CoralScored += 1;
                 }
             }

@@ -1,5 +1,6 @@
 ﻿﻿using System;
 using System.Collections;
+using MoSimCore;
 using MoSimCore.Enums;
 using TMPro;
 using UnityEngine;
@@ -95,7 +96,7 @@ namespace MoSimCore.BaseClasses.GameManagement.TimerManagement
         /// </summary>
         protected virtual void Update()
         {
-            if (IsCountingDown && CurrentGameState != GameState.End)
+            if (!RlRuntimeSettings.Enabled && IsCountingDown && CurrentGameState != GameState.End)
             {
                 UpdateTimer();
             }
@@ -110,9 +111,32 @@ namespace MoSimCore.BaseClasses.GameManagement.TimerManagement
         /// </summary>
         public virtual void UpdateTimer()
         {
-            Timer -= Time.deltaTime;
+            UpdateTimerInternal(Time.deltaTime, true);
+        }
+
+        /// <summary>
+        /// Advances match time from the deterministic RL fixed-step loop.
+        /// </summary>
+        public virtual void AdvanceRlTime(float deltaTime)
+        {
+            if (!RlRuntimeSettings.Enabled || !IsCountingDown || CurrentGameState == GameState.End)
+            {
+                return;
+            }
+
+            UpdateTimerInternal(deltaTime, false);
+        }
+
+        private void UpdateTimerInternal(float deltaTime, bool validateWallClock)
+        {
+            Timer -= deltaTime;
             CheckStateTransitions();
             OnTimerUpdated?.Invoke(Timer);
+
+            if (!validateWallClock || RlRuntimeSettings.Enabled)
+            {
+                return;
+            }
             
             // Check for & flag discrepancies between elapsed DateTime and the Timer
             if (CurrentGameState == GameState.Auto) {

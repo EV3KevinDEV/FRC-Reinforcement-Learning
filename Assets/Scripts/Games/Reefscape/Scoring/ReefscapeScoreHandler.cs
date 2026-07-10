@@ -23,6 +23,23 @@ namespace Games.Reefscape.Scoring
             base.Start();
         }
 
+        public ReefscapeScoreSnapshot GetSnapshot(Alliance alliance, bool refresh = true)
+        {
+            if (refresh)
+            {
+                CalculateScore(alliance);
+            }
+
+            return new ReefscapeScoreSnapshot(
+                alliance == Alliance.Blue ? BlueScoreData : RedScoreData);
+        }
+
+        public void RefreshScores()
+        {
+            CalculateScore(Alliance.Blue);
+            CalculateScore(Alliance.Red);
+        }
+
         public override void Reset()
         {
             base.Reset();

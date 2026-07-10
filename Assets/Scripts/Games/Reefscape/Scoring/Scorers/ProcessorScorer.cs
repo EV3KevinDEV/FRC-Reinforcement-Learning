@@ -76,7 +76,7 @@ namespace Games.Reefscape.Scoring.Scorers
             if (scoreData is not ReefscapeScoreData reefscapeScoreData)
                 return;
 
-            reefscapeScoreData.NetPoints += _algaeScored * 6;
+            reefscapeScoreData.ProcessorPoints += _algaeScored * ReefscapeOfficialScoring.Processor;
             reefscapeScoreData.AlgaeScored += _algaeScored;
         }
 

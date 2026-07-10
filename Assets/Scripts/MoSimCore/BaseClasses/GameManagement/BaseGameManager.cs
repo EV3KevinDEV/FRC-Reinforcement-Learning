@@ -34,6 +34,11 @@ namespace MoSimCore.BaseClasses.GameManagement
         
         /// <summary>Gets the current match timer value in seconds.</summary>
         public float Timer => TimerManager.Timer;
+
+        public void AdvanceRlTimer(float deltaTime)
+        {
+            TimerManager?.AdvanceRlTime(deltaTime);
+        }
         
         /// <summary>Gets whether the game is currently performing a reset operation.</summary>
         public bool IsResetting { get; protected set; }
@@ -81,11 +86,14 @@ namespace MoSimCore.BaseClasses.GameManagement
             }
 
             if (TimerManager == null || AudioManager == null) return;
-            TimerManager.OnMatchStart += AudioManager.PlayMatchStart;
-            TimerManager.OnAutoEnd += AudioManager.PlayMatchEnd;
-            TimerManager.OnTeleopStart += AudioManager.PlayTeleopStart;
-            TimerManager.OnEndgameStart += AudioManager.PlayEndgameStart;
-            TimerManager.OnMatchEnd += AudioManager.PlayMatchEnd;
+            if (!RlRuntimeSettings.Enabled)
+            {
+                TimerManager.OnMatchStart += AudioManager.PlayMatchStart;
+                TimerManager.OnAutoEnd += AudioManager.PlayMatchEnd;
+                TimerManager.OnTeleopStart += AudioManager.PlayTeleopStart;
+                TimerManager.OnEndgameStart += AudioManager.PlayEndgameStart;
+                TimerManager.OnMatchEnd += AudioManager.PlayMatchEnd;
+            }
 
             TimerManager.OnGameStateChanged += OnGameStateChanged;
         }

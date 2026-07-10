@@ -37,7 +37,7 @@ namespace RobotFramework.Controllers.GamePieceSystem
 
             if (_preloadState != null)
             {
-                InitializePreload();
+                AddPreload();
             }
         }
 
@@ -71,24 +71,35 @@ namespace RobotFramework.Controllers.GamePieceSystem
             }
         }
 
-        private void InitializePreload()
+        public bool AddPreload()
         {
-            if (!TryGetComponent(out _robotBase)) return;
-            if (_robotBase.PreloadGamePiece == null) return;
+            if (_preloadState == null) return false;
+            if (!TryGetComponent(out _robotBase)) return false;
+            if (_robotBase.PreloadGamePiece == null) return false;
 
             var preload = Instantiate(_robotBase.PreloadGamePiece, _preloadState.stateTarget.position,
                 _preloadState.stateTarget.rotation, _preloadState.stateTarget);
 
             var controller = preload.GetComponent<GamePieceController<TPiece, TData>>();
-            if (!controller) return;
+            if (!controller)
+            {
+                Destroy(preload);
+                return false;
+            }
 
-            var node = gamePieceNodes.FirstOrDefault(node => !node.controller);
-            if (node == null) return;
+            var node = gamePieceNodes.FirstOrDefault(node =>
+                string.Equals(node.pieceName, "Coral", StringComparison.OrdinalIgnoreCase) && !node.controller);
+            if (node == null)
+            {
+                Destroy(preload);
+                return false;
+            }
 
             node.controller = controller;
             node.currentStateNum = _preloadState.stateNum;
             node.wasMovingTo = _preloadState.name?.Trim().ToLower() ?? string.Empty;
             node.atTarget = true;
+            return true;
         }
 
         private void FixedUpdate()

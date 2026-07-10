@@ -44,6 +44,12 @@ namespace RobotFramework
         
         public string PlayerPrefix { get; set; } = "";
 
+        /// <summary>Whether commands are supplied by an external simulation client.</summary>
+        public bool ExternalControlEnabled { get; private set; }
+
+        /// <summary>The most recent external command, held until replaced.</summary>
+        public ExternalRobotCommand ExternalCommand { get; private set; } = ExternalRobotCommand.Idle;
+
         /// <summary>Gets or sets whether the robot uses field-centric or robot-centric movement.</summary>
         public bool IsFieldCentric { get; set; } = true;
         
@@ -101,6 +107,53 @@ namespace RobotFramework
         /// <summary>Gets the pause input action.</summary>
         public InputAction PauseAction { get; private set; }
 
+        public void EnableExternalControl(bool enabled)
+        {
+            ExternalControlEnabled = enabled;
+            ExternalCommand = ExternalRobotCommand.Idle;
+            if (enabled)
+            {
+                IsFieldCentric = false;
+            }
+        }
+
+        public void SetExternalCommand(ExternalRobotCommand command)
+        {
+            command.Translation = Vector2.ClampMagnitude(command.Translation, 1f);
+            command.Rotation = Mathf.Clamp(command.Rotation, -1f, 1f);
+            command.TargetSetpoint = Mathf.Clamp(command.TargetSetpoint, 0, 5);
+            command.ManipulatorIntent = Mathf.Clamp(command.ManipulatorIntent, -1f, 1f);
+            ExternalCommand = command;
+        }
+
+        public void ClearExternalPlacePulse()
+        {
+            if (!ExternalControlEnabled || !ExternalCommand.PlacePulse)
+            {
+                return;
+            }
+
+            var command = ExternalCommand;
+            command.PlacePulse = false;
+            ExternalCommand = command;
+        }
+
+        public Vector2 ReadTranslationInput() => ExternalControlEnabled
+            ? ExternalCommand.Translation
+            : TranslateAction.ReadValue<Vector2>();
+
+        public float ReadRotationInput() => ExternalControlEnabled
+            ? ExternalCommand.Rotation
+            : RotateAction.ReadValue<float>();
+
+        public bool IsIntakePressed() => ExternalControlEnabled
+            ? ExternalCommand.IntakePressed
+            : IntakeAction.IsPressed();
+
+        public bool IsPlacePressed() => ExternalControlEnabled
+            ? ExternalCommand.PlacePressed
+            : OuttakeAction.IsPressed();
+
         [Header("Bumper Materials")]
         [SerializeField]
         [Tooltip("Array of MeshRenderer components for bumper coloring.")]
@@ -148,6 +201,11 @@ namespace RobotFramework
         /// </summary>
         protected virtual void Update()
         {
+            if (ExternalControlEnabled)
+            {
+                return;
+            }
+
             if (PauseAction.triggered)
             {
                 SceneManager.Instance.LoadScene("MainMenu", "CrossFade");
