@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from gymnasium.envs.registration import register, registry
 
+from .camera import VirtualCameraFrame, VirtualCameraInfo
 from .constants import ACTION_DIM, GAMEPAD_ACTION_DIM, OBSERVATION_DIM, PROTOCOL_VERSION
 from .env import MoSimEnv
 from .vec_env import MoSimVecEnv
@@ -36,4 +37,6 @@ __all__ = [
     "MoSimVecEnv",
     "OBSERVATION_DIM",
     "PROTOCOL_VERSION",
+    "VirtualCameraFrame",
+    "VirtualCameraInfo",
 ]

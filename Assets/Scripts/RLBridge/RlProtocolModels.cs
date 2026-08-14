@@ -23,6 +23,8 @@ namespace MoSimRL
         public int frame_skip = 5;
         public int curriculum_stage;
         public string scenario;
+        public string camera_name;
+        public int jpeg_quality = 85;
     }
 
     [Serializable]
@@ -48,6 +50,10 @@ namespace MoSimRL
         public float control_dt;
         public float decision_dt;
         public int frame_skip;
+        public bool virtual_camera_api;
+        public bool camera_rendering_available;
+        public RlCameraInfoDto[] cameras;
+        public RlCameraFrameDto camera_frame;
         public RlStateDto state;
         public RlEventsDto events;
         public RlInfoDto info;
@@ -151,5 +157,31 @@ namespace MoSimRL
         public int step_id;
         public int curriculum_stage;
         public string scenario;
+    }
+
+    [Serializable]
+    public class RlCameraInfoDto
+    {
+        public string name;
+        public int width;
+        public int height;
+        public float vertical_fov_degrees;
+        public float near_clip;
+        public float far_clip;
+        public float[] robot_position = new float[3];
+        public float[] robot_rotation_euler = new float[3];
+    }
+
+    [Serializable]
+    public class RlCameraFrameDto
+    {
+        public string name;
+        public int width;
+        public int height;
+        public string encoding = "jpeg";
+        public string media_type = "image/jpeg";
+        public string image_base64;
+        public long sequence;
+        public float sim_time;
     }
 }

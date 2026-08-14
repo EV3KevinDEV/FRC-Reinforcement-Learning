@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Games.Reefscape.Enums;
 using Games.Reefscape.Robots;
 using Games.Reefscape.Scoring;
@@ -10,6 +11,7 @@ using MoSimCore.Enums;
 using RobotFramework;
 using RobotFramework.Controllers.Drivetrain;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace MoSimRL
 {
@@ -17,6 +19,7 @@ namespace MoSimRL
     public sealed class RlEnvironmentController : MonoBehaviour
     {
         private const double FinalScoringGraceSeconds = 3.0;
+        private const int MaxCameraJpegBytes = 700_000;
         private readonly RlScenarioManager _scenario = new();
         private RlTcpServer _server;
         private RlRequest _activeRequest;
@@ -76,7 +79,9 @@ namespace MoSimRL
                         fixed_dt = RlRuntimeSettings.FixedDeltaTime,
                         control_dt = RlRuntimeSettings.ControlDeltaTime,
                         decision_dt = RlRuntimeSettings.FrameSkip * RlRuntimeSettings.ControlDeltaTime,
-                        frame_skip = RlRuntimeSettings.FrameSkip
+                        frame_skip = RlRuntimeSettings.FrameSkip,
+                        virtual_camera_api = true,
+                        camera_rendering_available = CameraRenderingAvailable
                     });
                     break;
                 case "ping":
@@ -94,6 +99,12 @@ namespace MoSimRL
                     break;
                 case "step":
                     BeginStep(request);
+                    break;
+                case "list_cameras":
+                    ListVirtualCameras(request);
+                    break;
+                case "get_camera_frame":
+                    GetVirtualCameraFrame(request);
                     break;
                 case "close":
                     SendSuccess(request, new RlResponsePayload
@@ -326,6 +337,115 @@ namespace MoSimRL
                 }
             };
         }
+
+        private void ListVirtualCameras(RlRequest request)
+        {
+            if (FindRobot() == null)
+            {
+                SendError(request, "robot_not_ready");
+                return;
+            }
+
+            var cameras = FindVirtualCameras();
+            SendSuccess(request, new RlResponsePayload
+            {
+                worker_id = RlRuntimeSettings.WorkerId,
+                virtual_camera_api = true,
+                camera_rendering_available = CameraRenderingAvailable,
+                cameras = cameras.Select(camera => camera.BuildInfo(_robot.transform)).ToArray()
+            });
+        }
+
+        private void GetVirtualCameraFrame(RlRequest request)
+        {
+            if (FindRobot() == null)
+            {
+                SendError(request, "robot_not_ready");
+                return;
+            }
+            if (!CameraRenderingAvailable)
+            {
+                SendError(request, "camera_rendering_unavailable");
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(request.payload.camera_name))
+            {
+                SendError(request, "camera_name_required");
+                return;
+            }
+            if (request.payload.jpeg_quality is < 1 or > 95)
+            {
+                SendError(request, "invalid_jpeg_quality");
+                return;
+            }
+
+            var matches = FindVirtualCameras()
+                .Where(camera => string.Equals(
+                    camera.CameraId,
+                    request.payload.camera_name,
+                    StringComparison.Ordinal))
+                .ToArray();
+            if (matches.Length == 0)
+            {
+                SendError(request, "camera_not_found");
+                return;
+            }
+            if (matches.Length > 1)
+            {
+                SendError(request, "camera_name_ambiguous");
+                return;
+            }
+
+            try
+            {
+                var camera = matches[0];
+                var jpeg = camera.CaptureJpeg(request.payload.jpeg_quality);
+                if (jpeg == null || jpeg.Length == 0)
+                {
+                    SendError(request, "camera_capture_failed");
+                    return;
+                }
+                if (jpeg.Length > MaxCameraJpegBytes)
+                {
+                    SendError(request, "camera_frame_too_large");
+                    return;
+                }
+
+                SendSuccess(request, new RlResponsePayload
+                {
+                    worker_id = RlRuntimeSettings.WorkerId,
+                    virtual_camera_api = true,
+                    camera_rendering_available = true,
+                    camera_frame = new RlCameraFrameDto
+                    {
+                        name = camera.CameraId,
+                        width = camera.ImageWidth,
+                        height = camera.ImageHeight,
+                        image_base64 = Convert.ToBase64String(jpeg),
+                        sequence = camera.CaptureSequence,
+                        sim_time = (float)_simTime
+                    }
+                });
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    $"Virtual camera '{request.payload.camera_name}' capture failed: {exception.Message}",
+                    this);
+                SendError(request, "camera_capture_failed");
+            }
+        }
+
+        private RobotVirtualCamera[] FindVirtualCameras()
+        {
+            return _robot.GetComponentsInChildren<RobotVirtualCamera>(true)
+                .OrderBy(camera => camera.CameraId, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static bool CameraRenderingAvailable =>
+            RlRuntimeSettings.Graphical &&
+            SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;
 
         private void PopulateRobotState(RlStateDto state)
         {

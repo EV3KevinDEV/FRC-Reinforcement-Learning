@@ -1,8 +1,14 @@
 # MoSimulator Reefscape RL
 
-This branch adds a versioned Gymnasium/Stable-Baselines3 bridge to MoSimulator `v26.2.0` for state-based, vectorized PPO training with the blue Team 118 Robonauts robot. Eight independent Linux Dedicated Server players are the default vectorization model.
+> **Independent research fork.** This repository is not the official MoSimulator repository and is not endorsed by Cascade Studios LLP, FIRST, or any referenced FRC team. Product, event, robot, and team names are used only to identify the systems studied; associated names, marks, and assets remain the property of their respective owners.
 
-The Unity project remains pinned to `2023.2.22f1`. `origin` remains the project fork and `mosim-upstream` tracks the public simulator repository.
+This repository adds a versioned Gymnasium/Stable-Baselines3 bridge to MoSimulator `v26.2.0` for state-based, vectorized PPO training with the blue Team 118 Robonauts robot. Eight independent Linux Dedicated Server players are the default vectorization model.
+
+The upstream basis is the pinned [`MoSimulator-Public` `v26.2.0` snapshot](https://github.com/MoSimulator/MoSimulator-Public/tree/v26.2.0), commit [`9dd3d7d`](https://github.com/MoSimulator/MoSimulator-Public/commit/9dd3d7d1d04529d82c98d049f2fc273ebb1e7213). That tagged snapshot identifies itself as GPL-3.0 software and contains the GPL-3.0 license used by this fork.[^upstream-snapshot] This repository is a modified work, with RL, training, testing, documentation, and tooling changes made in 2026; see [NOTICE.md](NOTICE.md) for the detailed provenance and modification notice.
+
+As of August 11, 2026, the [current upstream `main` branch license](https://github.com/MoSimulator/MoSimulator-Public/blob/main/LICENSE) uses different, restrictive terms. Do not merge or copy post-`v26.2.0` upstream material into this fork without a separate license review. The presence of research code or a citation does not itself clear third-party assets, trademarks, generated datasets, model weights, or publication screenshots.
+
+The Unity project remains pinned to `2023.2.22f1`. `origin` is this research fork and `mosim-upstream` identifies the upstream repository; the latter should be treated as reference-only unless the license of a specific source snapshot has been reviewed.
 
 ## Setup
 
@@ -24,7 +30,15 @@ conda run -n mosim-rl mosim-benchmark
 conda run -n mosim-rl mosim-train --total-timesteps 100000
 ```
 
+Training starts a TensorBoard server automatically at
+`http://127.0.0.1:6006` and writes its output to the run directory. Use
+`--tensorboard-port PORT` or `--tensorboard-host HOST` to change the listener,
+or `--no-tensorboard` when only event-file logging is wanted. The server stops
+when training exits.
+
 The graphical development player is built at `_Build/RL/LinuxDevelopment/MoSimRL.x86_64` for visual debugging.
+
+Robot-mounted virtual cameras can be added from **MoSimulator > RL > Virtual Camera Tool** in the Unity editor. A graphical environment can then call `list_virtual_cameras()` and `get_virtual_camera_frame("front")`; the returned object contains decoded JPEG bytes and a `.save(path)` helper. Run `mosim-camera-preview --camera <camera-id>` for a live OpenCV view. See [the virtual-camera guide](docs/VIRTUAL_CAMERAS.md) for the complete setup, API, limits, and source citations.
 
 To watch a random policy in real time:
 
@@ -78,7 +92,7 @@ conda activate mosim-rl
 | `mosim-gamepad --controller 1 --deadzone 0.15 --steps 1000 --print-every 1` | Test another controller and print every gamepad/robot command |
 | `mosim-gamepad --scripted-demo --print-every 5` | Visually exercise every active controller mapping without touching a gamepad |
 | `mosim-gamepad --scripted-demo --pickup-test --print-every 5` | Visually prove coral acquisition through Team 118's normal ground intake and then exercise every mapping |
-| `mosim-train --action-mode gamepad --total-timesteps 100000` | Train vectorized PPO with the recommended 25D controller output |
+| `mosim-train --action-mode gamepad --total-timesteps 100000` | Train vectorized PPO with the recommended 25D controller output and a local TensorBoard server |
 | `mosim-train --action-mode semantic --total-timesteps 100000` | Train with the legacy six-value action contract |
 | `mosim-train --graphical --wandb --action-mode gamepad` | Train while rendering worker 0 and syncing metrics/checkpoints to W&B |
 | `mosim-evaluate runs/<run>/ppo_final.zip --vecnormalize runs/<run>/vecnormalize.pkl --action-mode gamepad --graphical` | Evaluate a gamepad checkpoint visually |
@@ -99,14 +113,16 @@ export MOSIM_EXECUTABLE="$PWD/_Build/RL/LinuxServer/MoSimRL.x86_64"
 MOSIM_PYTEST_MARKS=integration scripts/test_python.sh
 MOSIM_RUN_SLOW_INTEGRATION=1 MOSIM_PYTEST_MARKS=integration scripts/test_python.sh
 
-# Local dashboards
+# TensorBoard starts with training by default; this still starts it manually
 tensorboard --logdir runs
 wandb login
 ```
 
 Useful flags shared by the rollout/training tools include `--seed`, `--curriculum-stage 0..4`, `--executable PATH`, and `--action-mode gamepad|semantic`. Run any command with `--help` for its full argument list.
 
-See [the environment contract](docs/ENVIRONMENT.md), [wire protocol](docs/PROTOCOL.md), [verification guide](docs/VERIFICATION.md), and [roadmap](ROADMAP.md).
+Runnable examples of `gym.make`, `reset`/`step`, physical-controller driving, virtual-camera capture, vectorized workers, and PPO checkpoint rollout are in [`python/examples`](python/examples/README.md).
+
+See [the environment contract](docs/ENVIRONMENT.md), [wire protocol](docs/PROTOCOL.md), [virtual-camera guide](docs/VIRTUAL_CAMERAS.md), [verification guide](docs/VERIFICATION.md), [research-publication checklist](docs/RESEARCH_PUBLICATION.md), and [roadmap](ROADMAP.md).
 
 ## Architecture
 
@@ -114,12 +130,51 @@ Python sends all vector actions before waiting for any worker. Each isolated Uni
 
 This is process-level CPU vectorization using headless Dedicated Server players. MoSimulator's global singletons and scene-wide discovery currently prevent Isaac Lab-style GPU scene replication.
 
-## Upstream project
+## Citation
 
-Welcome to the official repository for the public release of the MoSimulator source code. This source code allows you to build robot mods. For more information, visit the [MoSim website](https://mosimulator.com/).
+Research publications should cite both the upstream simulator snapshot and this RL fork. A machine-readable citation for the fork is provided in [`CITATION.cff`](CITATION.cff); GitHub uses this file to generate APA and BibTeX citations.[^github-citation]
 
-## Modding Documentation
-All of the modding documentation is located in a Google Doc here: [Modding Documentation](https://docs.mosimulator.com/).
+Suggested software references:
 
-<br>
-Note: MoSimulator's source code is protected under a GNU GPL 3 License. Please follow its guidelines as you work on the game.
+1. Cascade Studios. (2026). *MoSimulator Public Repository* (Version v26.2.0) [Computer software]. GitHub. https://github.com/MoSimulator/MoSimulator-Public/tree/v26.2.0
+2. EV3KevinDEV. (2026). *MoSimulator Reefscape RL* (Version 0.1.0) [Computer software]. GitHub. https://github.com/EV3KevinDEV/FRC-Reinforcement-Learning-
+
+```bibtex
+@software{cascade_studios_mosimulator_2026,
+  author  = {{Cascade Studios}},
+  title   = {MoSimulator Public Repository},
+  version = {v26.2.0},
+  year    = {2026},
+  url     = {https://github.com/MoSimulator/MoSimulator-Public/tree/v26.2.0},
+  note    = {Upstream source snapshot, commit 9dd3d7d1d04529d82c98d049f2fc273ebb1e7213}
+}
+
+@software{ev3kevindev_mosimulator_reefscape_rl_2026,
+  author  = {{EV3KevinDEV}},
+  title   = {MoSimulator Reefscape RL},
+  version = {0.1.0},
+  year    = {2026},
+  url     = {https://github.com/EV3KevinDEV/FRC-Reinforcement-Learning-}
+}
+```
+
+For a submitted paper, cite an archived release or exact commit rather than a moving branch. If a DOI-backed archive is created, replace the fork URL above with that DOI. The repository does not contain a verified personal name or ORCID for the maintainer, so the current citation uses the GitHub handle `EV3KevinDEV`; replace it with verified contributor metadata before release when appropriate.
+
+## License, modifications, and AI assistance
+
+The code in this fork is distributed under the repository's [GNU GPL version 3 license](LICENSE). GPLv3 requires a modified work to carry prominent modification and license notices, and distribution of executable artifacts can require the corresponding source.[^gpl-modified][^gpl-source] The repository source, build scripts, `LICENSE`, and [NOTICE.md](NOTICE.md) should therefore accompany any published software artifact.
+
+Substantial portions of the RL extension, tests, tooling, and documentation were developed with generative-AI assistance, including OpenAI Codex—informally, this project has been partly “vibe coded.” AI-generated suggestions were selected and integrated under maintainer direction, but that fact is not evidence of correctness or independent review. Any research author using this software must perform and report their own validation and follow the target venue's current AI-disclosure policy. See the [research-publication checklist](docs/RESEARCH_PUBLICATION.md) for a disclosure template and the remaining rights-clearance steps.
+
+This documentation improves attribution and license transparency; it is not legal advice and does not guarantee that a particular paper, dataset, model, screenshot, or binary release is cleared for publication. Obtain review from your institution or qualified counsel when publication includes third-party visual assets, branding, or redistributed executables.
+
+## Upstream resources
+
+- Upstream snapshot used here: [`MoSimulator-Public` `v26.2.0`](https://github.com/MoSimulator/MoSimulator-Public/tree/v26.2.0)
+- Official MoSimulator website: [mosimulator.com](https://mosimulator.com/)
+- Official modding documentation: [docs.mosimulator.com](https://docs.mosimulator.com/)
+
+[^upstream-snapshot]: Cascade Studios, “MoSimulator Public Repository,” version `v26.2.0`, GitHub, 2026. The tagged repository README identifies GPL-3.0, and the tag contains the corresponding [`LICENSE`](https://github.com/MoSimulator/MoSimulator-Public/blob/v26.2.0/LICENSE).
+[^github-citation]: GitHub, “[About CITATION files](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files),” accessed August 11, 2026.
+[^gpl-modified]: Free Software Foundation, “[GNU General Public License, version 3, §5: Conveying Modified Source Versions](https://www.gnu.org/licenses/gpl-3.0.html#section5),” 2007.
+[^gpl-source]: Free Software Foundation, “[Frequently Asked Questions about the GNU Licenses: Distribution of programs released under the GNU licenses](https://www.gnu.org/licenses/gpl-faq.html#GPLRequireSourcePostedPublic),” accessed August 11, 2026.

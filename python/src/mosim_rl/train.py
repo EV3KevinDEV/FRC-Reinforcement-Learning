@@ -15,6 +15,7 @@ from .cli import (
     positive_int,
     selected_num_envs,
 )
+from .tensorboard_server import TensorBoardServer
 from .vec_env import MoSimVecEnv
 
 
@@ -36,6 +37,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--run-dir", type=Path, default=Path("runs"))
+    parser.add_argument(
+        "--no-tensorboard",
+        action="store_true",
+        help="write TensorBoard metrics without starting the local web server",
+    )
+    parser.add_argument("--tensorboard-host", default="127.0.0.1")
+    parser.add_argument("--tensorboard-port", type=positive_int, default=6006)
     parser.add_argument(
         "--graphical",
         action="store_true",
@@ -62,7 +70,8 @@ def main() -> None:
             "CUDA training requested, but torch.cuda.is_available() is false"
         )
     run_name = datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_dir = (args.run_dir / run_name).resolve()
+    runs_dir = args.run_dir.resolve()
+    run_dir = runs_dir / run_name
     run_dir.mkdir(parents=True, exist_ok=False)
     config = {
         "executable": str(args.executable.resolve()),
@@ -74,6 +83,11 @@ def main() -> None:
         "action_mode": args.action_mode,
         "device": args.device,
         "graphical_worker": 0 if args.graphical else None,
+        "tensorboard": {
+            "server_enabled": not args.no_tensorboard,
+            "host": args.tensorboard_host,
+            "port": args.tensorboard_port,
+        },
         "wandb": {
             "enabled": args.wandb,
             "project": args.wandb_project,
@@ -108,9 +122,18 @@ def main() -> None:
     monitored = VecMonitor(base_env, filename=str(run_dir / "monitor.csv"))
     checked = VecCheckNan(monitored, raise_exception=True)
     env = VecNormalize(checked, norm_obs=False, norm_reward=True, clip_reward=10.0)
+    tensorboard = TensorBoardServer(
+        log_dir=runs_dir,
+        host=args.tensorboard_host,
+        port=args.tensorboard_port,
+        output_path=run_dir / "tensorboard-server.log",
+    )
     wandb_run = None
     callback = None
     try:
+        if not args.no_tensorboard:
+            tensorboard.start()
+            print(f"TensorBoard: {tensorboard.url}", flush=True)
         if args.wandb:
             import wandb
             from wandb.integration.sb3 import WandbCallback
@@ -162,9 +185,14 @@ def main() -> None:
         model.save(run_dir / "ppo_final")
         env.save(run_dir / "vecnormalize.pkl")
     finally:
-        env.close()
-        if wandb_run is not None:
-            wandb_run.finish()
+        try:
+            env.close()
+        finally:
+            try:
+                if wandb_run is not None:
+                    wandb_run.finish()
+            finally:
+                tensorboard.stop()
 
 
 if __name__ == "__main__":

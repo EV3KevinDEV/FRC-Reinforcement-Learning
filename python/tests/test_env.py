@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 from copy import deepcopy
 
 import numpy as np
+import pytest
 
 from mosim_rl.env import MoSimEnv
 from mosim_rl.constants import GAMEPAD_ACTION_DIM
@@ -33,6 +35,42 @@ class FakeClient:
 
     def close(self) -> None:
         self.closed = True
+
+
+class CameraFakeClient(FakeClient):
+    def request(self, command: str, payload: dict, **kwargs) -> dict:
+        self.last_command = command
+        self.last_payload = payload
+        if command == "list_cameras":
+            return {
+                "camera_rendering_available": True,
+                "cameras": [
+                    {
+                        "name": "front",
+                        "width": 320,
+                        "height": 180,
+                        "vertical_fov_degrees": 70.0,
+                        "near_clip": 0.03,
+                        "far_clip": 50.0,
+                        "robot_position": [0.0, 0.5, 0.4],
+                        "robot_rotation_euler": [0.0, 0.0, 0.0],
+                    }
+                ],
+            }
+        if command == "get_camera_frame":
+            return {
+                "camera_frame": {
+                    "name": payload["camera_name"],
+                    "width": 320,
+                    "height": 180,
+                    "encoding": "jpeg",
+                    "media_type": "image/jpeg",
+                    "image_base64": base64.b64encode(b"jpeg-bytes").decode("ascii"),
+                    "sequence": 1,
+                    "sim_time": 0.5,
+                }
+            }
+        return super().request(command, payload, **kwargs)
 
 
 def test_action_clipping_and_five_value_step(raw_state: dict) -> None:
@@ -100,5 +138,35 @@ def test_gamepad_policy_action_is_adapted_before_transport(raw_state: dict) -> N
         assert info["action_mode"] == "gamepad"
         assert info["gamepad_action"].shape == (25,)
         assert info["semantic_action"].shape == (6,)
+    finally:
+        env.close()
+
+
+def test_virtual_camera_api_lists_and_captures(raw_state: dict) -> None:
+    client = CameraFakeClient(raw_state)
+    env = MoSimEnv(client=client)
+    try:
+        env.reset(seed=12)
+        cameras = env.list_virtual_cameras()
+        assert [camera.name for camera in cameras] == ["front"]
+
+        frame = env.get_virtual_camera_frame("front", jpeg_quality=91)
+        assert frame.image_bytes == b"jpeg-bytes"
+        assert frame.sequence == 1
+        assert client.last_command == "get_camera_frame"
+        assert client.last_payload == {"camera_name": "front", "jpeg_quality": 91}
+    finally:
+        env.close()
+
+
+def test_virtual_camera_api_rejects_capture_during_pending_step(raw_state: dict) -> None:
+    client = CameraFakeClient(raw_state)
+    env = MoSimEnv(client=client)
+    try:
+        env.reset()
+        env.begin_step(np.zeros(6, dtype=np.float32))
+        with pytest.raises(RuntimeError, match="while a step is pending"):
+            env.get_virtual_camera_frame("front")
+        env.finish_step()
     finally:
         env.close()

@@ -8,6 +8,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from .camera import VirtualCameraFrame, VirtualCameraInfo
 from .constants import (
     ACTION_HIGH,
     ACTION_LOW,
@@ -298,6 +299,72 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
     ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         self.begin_step(action)
         return self.finish_step()
+
+    def list_virtual_cameras(self) -> list[VirtualCameraInfo]:
+        """Return sensor cameras configured on the active robot prefab."""
+
+        self._assert_camera_request_ready()
+        assert self._client is not None
+        payload = self._client.request(
+            "list_cameras", {}, timeout=self.step_timeout
+        )
+        cameras = payload.get("cameras")
+        if not isinstance(cameras, list):
+            raise ProtocolError("list_cameras response did not contain a cameras array")
+        if not all(isinstance(camera, dict) for camera in cameras):
+            raise ProtocolError("cameras array contained a non-object entry")
+        try:
+            return [VirtualCameraInfo.from_payload(camera) for camera in cameras]
+        except ValueError as exc:
+            raise ProtocolError(f"invalid virtual camera metadata: {exc}") from exc
+
+    def get_virtual_camera_frame(
+        self,
+        camera_name: str,
+        *,
+        jpeg_quality: int = 85,
+    ) -> VirtualCameraFrame:
+        """Capture and decode the current JPEG frame from a named sensor camera."""
+
+        self._assert_camera_request_ready()
+        if not isinstance(camera_name, str):
+            raise ValueError("camera_name must be a string")
+        camera_name = camera_name.strip()
+        if not camera_name:
+            raise ValueError("camera_name must be a non-empty string")
+        if (
+            isinstance(jpeg_quality, bool)
+            or not isinstance(jpeg_quality, int)
+            or not 1 <= jpeg_quality <= 95
+        ):
+            raise ValueError("jpeg_quality must be an integer from 1 through 95")
+
+        assert self._client is not None
+        payload = self._client.request(
+            "get_camera_frame",
+            {"camera_name": camera_name, "jpeg_quality": jpeg_quality},
+            timeout=self.step_timeout,
+        )
+        frame_payload = payload.get("camera_frame")
+        if not isinstance(frame_payload, dict):
+            raise ProtocolError(
+                "get_camera_frame response did not contain a camera_frame object"
+            )
+        try:
+            frame = VirtualCameraFrame.from_payload(frame_payload)
+        except ValueError as exc:
+            raise ProtocolError(f"invalid virtual camera frame: {exc}") from exc
+        if frame.name != camera_name:
+            raise ProtocolError(
+                f"camera frame name {frame.name!r} did not match {camera_name!r}"
+            )
+        return frame
+
+    def _assert_camera_request_ready(self) -> None:
+        if not self._connected or self._client is None:
+            raise RuntimeError("environment is not connected")
+        if self._pending_action is not None:
+            raise RuntimeError("cannot request a camera frame while a step is pending")
 
     def _build_info(
         self, payload: dict[str, Any], raw_state: dict[str, Any]

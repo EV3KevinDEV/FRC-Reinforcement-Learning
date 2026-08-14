@@ -48,6 +48,12 @@ The observation is `Box(-1, 1, (62,), float32)` with a fixed ordering:
 
 All scalar quantities are normalized and clipped to `[-1, 1]`. Non-finite telemetry is rejected.
 
+## Virtual-camera API
+
+Virtual cameras are an auxiliary API and do not change the 62-value state observation. After reset, `env.list_virtual_cameras()` returns typed configuration/calibration records and `env.get_virtual_camera_frame(name)` returns a typed JPEG frame. Capture requires the graphical development player; it does not advance simulation time and cannot overlap an in-flight environment step.
+
+See [Robot virtual cameras](VIRTUAL_CAMERAS.md) for prefab configuration, Python examples, constraints, and cited Unity rendering behavior. RGB image observations and visual encoder policies are not part of the current environment contract.
+
 ## Episode and score
 
 A natural episode covers 15 seconds of AUTO, the 3-second disabled transition, 135 seconds of TELEOP/endgame, and a final 3-second scoring grace. Match completion returns `terminated=True`; transport and worker failures return `truncated=True`.

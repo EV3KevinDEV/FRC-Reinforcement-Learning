@@ -90,5 +90,66 @@ namespace MoSimRL.Tests
             StringAssert.Contains("\"team_number\":118", json);
             StringAssert.Contains("\"observation_dim\":62", json);
         }
+
+        [Test]
+        public void VirtualCameraReportsRobotRelativeCalibration()
+        {
+            var robot = new GameObject("Robot");
+            var cameraObject = new GameObject("Virtual Camera");
+            try
+            {
+                robot.transform.position = new Vector3(4f, 0f, -2f);
+                robot.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+                cameraObject.transform.SetParent(robot.transform, false);
+                cameraObject.transform.localPosition = new Vector3(0.2f, 0.5f, 0.4f);
+                cameraObject.transform.localRotation = Quaternion.Euler(5f, 15f, 0f);
+                var sensorCamera = cameraObject.AddComponent<Camera>();
+                sensorCamera.fieldOfView = 72f;
+                sensorCamera.nearClipPlane = 0.05f;
+                sensorCamera.farClipPlane = 40f;
+                var virtualCamera = cameraObject.AddComponent<RobotVirtualCamera>();
+                virtualCamera.Configure("front", 320, 180);
+
+                var info = virtualCamera.BuildInfo(robot.transform);
+
+                Assert.That(info.name, Is.EqualTo("front"));
+                Assert.That(info.width, Is.EqualTo(320));
+                Assert.That(info.height, Is.EqualTo(180));
+                Assert.That(info.vertical_fov_degrees, Is.EqualTo(72f));
+                Assert.That(info.robot_position, Is.EqualTo(new[] { 0.2f, 0.5f, 0.4f })
+                    .Within(0.0001f));
+                Assert.That(info.robot_rotation_euler[0], Is.EqualTo(5f).Within(0.001f));
+                Assert.That(info.robot_rotation_euler[1], Is.EqualTo(15f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(robot);
+            }
+        }
+
+        [Test]
+        public void VirtualCameraPayloadSerializesJpegMetadata()
+        {
+            var json = JsonUtility.ToJson(new RlResponsePayload
+            {
+                virtual_camera_api = true,
+                camera_rendering_available = true,
+                camera_frame = new RlCameraFrameDto
+                {
+                    name = "front",
+                    width = 320,
+                    height = 180,
+                    image_base64 = "anBlZw==",
+                    sequence = 3,
+                    sim_time = 1.5f
+                }
+            });
+
+            StringAssert.Contains("\"virtual_camera_api\":true", json);
+            StringAssert.Contains("\"media_type\":\"image/jpeg\"", json);
+            StringAssert.Contains("\"image_base64\":\"anBlZw==\"", json);
+            StringAssert.Contains("\"sequence\":3", json);
+        }
     }
 }

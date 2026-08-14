@@ -24,6 +24,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+camera = [
+  "opencv-python>=4.10,<5",
+]
 test = [
   "pytest>=8.3",
   "pytest-timeout>=2.3",
@@ -36,6 +39,7 @@ mosim-random = "mosim_rl.random_rollout:main"
 mosim-gamepad = "mosim_rl.gamepad_rollout:main"
 mosim-benchmark = "mosim_rl.benchmark:main"
 mosim-soak = "mosim_rl.soak:main"
+mosim-camera-preview = "mosim_rl.camera_preview:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

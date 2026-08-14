@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software in research, cite this RL fork and the upstream
+  MoSimulator v26.2.0 snapshot as described in README.md.
+title: MoSimulator Reefscape RL
+type: software
+authors:
+  - family-names: EV3KevinDEV
+version: 0.1.0
+repository-code: https://github.com/EV3KevinDEV/FRC-Reinforcement-Learning-
+url: https://github.com/EV3KevinDEV/FRC-Reinforcement-Learning-
+license: GPL-3.0-only
+abstract: >-
+  An independently modified research fork of MoSimulator v26.2.0 that adds a
+  Gymnasium and Stable-Baselines3 reinforcement-learning bridge for the 2025
+  FRC Reefscape simulation.
+keywords:
+  - reinforcement learning
+  - robotics simulation
+  - Gymnasium
+  - Stable-Baselines3
+  - FRC

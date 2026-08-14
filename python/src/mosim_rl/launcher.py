@@ -5,6 +5,7 @@ import signal
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,8 @@ class UnityWorkerProcess:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         command = [str(self.executable)]
         if self.graphical:
+            if sys.platform.startswith("linux"):
+                command.append("-force-glcore")
             command.extend(
                 [
                     "-screen-fullscreen",

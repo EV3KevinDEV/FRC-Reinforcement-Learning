@@ -4,17 +4,12 @@ V1 deliberately proves the state-based, blue-alliance Team 118 coral-cycling pip
 
 ## Visual perception
 
-- Add configurable virtual cameras mounted to each robot, with robot-relative camera transforms, resolution, field of view, and capture rate defined by robot metadata.
+- [x] Add an editor tool for configurable virtual cameras mounted to robot prefabs, including robot-relative transforms, resolution, field of view, clip planes, and unique IDs.
+- [x] Add on-demand RGB JPEG retrieval to the RL protocol and typed Python environment API.
+- Add scheduled capture rates and buffered frame delivery for policies that need a fixed sensor cadence.
 - Add an image-observation mode for RGB and optional depth/segmentation frames while retaining the current state-vector mode for debugging and baseline comparisons.
-- Extend the RL protocol and vectorized environment to transport camera observations efficiently, then add a visual encoder policy and camera-specific observation tests.
+- Add batched camera observations to the vectorized environment, then add a visual encoder policy and image-observation tests.
 - Add camera calibration, lighting/occlusion randomization, and sim-to-real validation so visual policies do not depend on privileged simulator coordinates.
-
-## Robot adapters
-
-- Add a Team 2910 adapter with the same normalized drive/manipulator contract and robot-specific telemetry mapping.
-- Extract Team 118 control into an `IExternalRobotAdapter` interface selected from robot metadata.
-- Define a mod-facing adapter package so custom robots can declare setpoints, possession sensors, action mappings, and telemetry without modifying the bridge.
-- Add compatibility/version checks for adapter packages and prefab validation in the Unity editor.
 
 ## Game coverage
 

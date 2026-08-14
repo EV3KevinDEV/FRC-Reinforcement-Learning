@@ -90,4 +90,9 @@ Mods/Robonauts/Build/robonautsmod_assets_all_5774bae440d1954dc02e1305d3e24445.bu
 /python/src/*.egg-info/
 /python/src/**/__pycache__/
 /python/tests/**/__pycache__/
+/python/examples/**/__pycache__/
 *.pyc
+mono_crash.mem.*.blob
+
+# Local-only research publication/legal checklist
+/REMINDER_README.md
