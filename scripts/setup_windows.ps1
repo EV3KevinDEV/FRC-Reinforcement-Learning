@@ -237,8 +237,8 @@ function Test-UnitySmoke {
         return
     }
     Invoke-Checked $Conda @(
-        "run", "--name", $EnvironmentName, "mosim-random",
-        "--executable", $env:MOSIM_EXECUTABLE, "--steps", "20", "--check-env"
+        "run", "--name", $EnvironmentName, "mosim-smoke",
+        "--executable", $env:MOSIM_EXECUTABLE, "--steps", "20"
     )
 }
 

@@ -61,6 +61,22 @@ scripts\setup_windows.bat all -SkipSmokeTest
 Unity builds and validation, and `test` reruns the Python tests. The Windows
 commands use native `.exe` players; do not run this script inside WSL or Git Bash.
 
+### Docker setup
+
+A headless `linux/amd64` image packages the Python environment and a locally
+built Linux Dedicated Server player. After building that player, run:
+
+```bash
+scripts/docker.sh smoke       # Linux/macOS
+scripts\docker.bat smoke      # Windows with Docker Desktop
+```
+
+The smoke workflow runs the Python suite inside Docker and then exercises the
+real Unity Gym environment for 20 steps. The same image runs through Docker
+Desktop on x86-64 Windows and macOS; ARM hosts require slower `linux/amd64`
+emulation. See [the Docker runtime guide](docs/DOCKER.md) for prerequisites,
+Compose training commands, the support matrix, and verification boundaries.
+
 Training starts a TensorBoard server automatically at
 `http://127.0.0.1:6006` and writes its output to the run directory. Use
 `--tensorboard-port PORT` or `--tensorboard-host HOST` to change the listener,

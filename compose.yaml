@@ -1,0 +1,25 @@
+name: mosim-rl
+
+services:
+  mosim:
+    image: mosim-rl:local
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      additional_contexts:
+        unity_server: ./_Build/RL/LinuxServer
+    init: true
+    shm_size: 2gb
+    environment:
+      MOSIM_EXECUTABLE: /opt/mosim/unity/MoSimRL.x86_64
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "127.0.0.1:6006:6006"
+    volumes:
+      - type: bind
+        source: ./runs
+        target: /workspace/runs
+    command: ["mosim-smoke", "--steps", "20"]
+    stop_grace_period: 20s

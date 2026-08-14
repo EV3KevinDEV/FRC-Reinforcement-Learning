@@ -40,6 +40,7 @@ mosim-gamepad = "mosim_rl.gamepad_rollout:main"
 mosim-benchmark = "mosim_rl.benchmark:main"
 mosim-soak = "mosim_rl.soak:main"
 mosim-camera-preview = "mosim_rl.camera_preview:main"
+mosim-smoke = "mosim_rl.smoke:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
