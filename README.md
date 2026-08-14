@@ -30,6 +30,37 @@ conda run -n mosim-rl mosim-benchmark
 conda run -n mosim-rl mosim-train --total-timesteps 100000
 ```
 
+### Native Windows setup
+
+From Command Prompt or PowerShell on Windows 10/11, run:
+
+```bat
+scripts\setup_windows.bat all
+```
+
+The script checks for 25 GiB of free space; installs Miniconda and Unity Hub with
+`winget` when needed; creates the `mosim-rl` Python environment, including test
+and virtual-camera dependencies; installs Unity `2023.2.22f1` with Windows
+Dedicated Server Build Support (Unity Hub module
+[`windows-server`](https://docs.unity.com/en-us/hub/hub-cli-reference#available-modules)); builds native Windows server and development
+players; runs the Python tests; and performs a short real-Unity smoke test. It
+also saves `MOSIM_EXECUTABLE` for the current Windows user.
+
+Unity Hub sign-in and license activation cannot be completed safely by the
+script. If Hub needs either one, the script opens Hub and tells you to rerun the
+same command afterward. Useful partial modes are:
+
+```bat
+scripts\setup_windows.bat setup
+scripts\setup_windows.bat build
+scripts\setup_windows.bat test
+scripts\setup_windows.bat all -SkipSmokeTest
+```
+
+`setup` installs dependencies without building, `build` performs setup plus both
+Unity builds and validation, and `test` reruns the Python tests. The Windows
+commands use native `.exe` players; do not run this script inside WSL or Git Bash.
+
 Training starts a TensorBoard server automatically at
 `http://127.0.0.1:6006` and writes its output to the run directory. Use
 `--tensorboard-port PORT` or `--tensorboard-host HOST` to change the listener,

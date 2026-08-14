@@ -14,6 +14,14 @@ import psutil
 
 from .constants import DEFAULT_HOST
 
+WINDOWS_CREATE_NEW_PROCESS_GROUP = getattr(
+    subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200
+)
+
+
+def _is_windows() -> bool:
+    return sys.platform == "win32"
+
 
 def reserve_tcp_port(host: str = DEFAULT_HOST) -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -92,13 +100,18 @@ class UnityWorkerProcess:
             command.append("--rl-realtime")
         env = os.environ.copy()
         env.setdefault("SDL_AUDIODRIVER", "dummy")
+        process_group_options = (
+            {"creationflags": WINDOWS_CREATE_NEW_PROCESS_GROUP}
+            if _is_windows()
+            else {"start_new_session": True}
+        )
         self.process = subprocess.Popen(
             command,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=env,
-            start_new_session=True,
+            **process_group_options,
         )
 
     def assert_running(self) -> None:
@@ -119,14 +132,23 @@ class UnityWorkerProcess:
         process, self.process = self.process, None
         if process is None or process.poll() is not None:
             return
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            return
+        if _is_windows():
+            try:
+                process.terminate()
+            except ProcessLookupError:
+                return
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                return
         try:
             process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
+            if _is_windows():
+                process.kill()
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
             process.wait(timeout=5.0)
 
     @property
