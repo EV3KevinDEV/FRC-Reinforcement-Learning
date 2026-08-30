@@ -11,7 +11,8 @@ scripts/build_unity.sh all
 |---|---|---|
 | Random Gymnasium rollout | `python python/examples/01_gymnasium_random_rollout.py --steps 100` | `gym.make`, spaces, `reset`, five-value `step`, episode reset, and cleanup |
 | Graphical random rollout | `python python/examples/01_gymnasium_random_rollout.py --graphical --steps 100` | The same Gym API with the graphical development player |
-| Virtual-camera frames | `python python/examples/02_virtual_camera_capture.py --camera frontLeft --show` | Camera discovery, JPEG capture, saving frames, and OpenCV decoding |
+| Virtual-camera frames | `python python/examples/02_virtual_camera_capture.py --camera LimeLightFrontLeft --show` | Camera discovery, JPEG capture, saving frames, and OpenCV decoding |
+| Limelight windows | `python python/examples/06_limelight_preview.py` | Separate OpenCV windows for `LimeLightFrontLeft`, `LimelightLeftBack`, and `LimelightRightBack` |
 | Vectorized workers | `python python/examples/03_vectorized_rollout.py --num-envs 4 --steps 100` | Batched SB3 `VecEnv` observations, actions, rewards, and automatic resets |
 | PPO checkpoint | `python python/examples/04_ppo_policy_rollout.py runs/RUN/ppo_final.zip --vecnormalize runs/RUN/vecnormalize.pkl --graphical` | Loading a trained PPO policy and optional `VecNormalize` statistics |
 | Controller driving | `python python/examples/05_controller_driver_control.py` | Physical controller input through the registered Gymnasium gamepad environment |
