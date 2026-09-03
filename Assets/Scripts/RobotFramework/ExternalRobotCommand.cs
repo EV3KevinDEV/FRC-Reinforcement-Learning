@@ -29,7 +29,12 @@ namespace RobotFramework
         public bool AutoAlignRightPulse;
 
         public bool IntakePressed => ManipulatorIntent > 0.33f;
-        public bool PlacePressed => PlacePulse;
+        // Semantic-policy commands retain their one-shot edge behavior, while a
+        // physical gamepad mirrors MoSim's native held-trigger input. The held
+        // fallback keeps a 50 Hz realtime packet from erasing the edge between
+        // ReefscapeRobotBase.Update and Robonauts.FixedUpdate.
+        public bool PlacePressed => PlacePulse ||
+                                    HasGamepadControls && ManipulatorIntent < -0.33f;
 
         public static bool IsPlaceRisingEdge(float currentIntent, float previousIntent) =>
             currentIntent < -0.33f && previousIntent >= -0.33f;

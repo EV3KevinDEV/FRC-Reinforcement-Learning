@@ -207,6 +207,17 @@ namespace Games.Reefscape.Robots
 
             //input overides
             ClearBuffers();
+
+            // The RL bridge applies realtime controls late in Update, while this
+            // robot performs releases in FixedUpdate. Promote place here so the
+            // first trigger press can enter Place and release in the same physics
+            // tick instead of requiring a second edge after auto-align.
+            if (ExternalControlEnabled &&
+                CurrentSetpoint != ReefscapeSetpoints.Place &&
+                IsPlacePressed())
+            {
+                SetState(ReefscapeSetpoints.Place);
+            }
             
             //run primary loop
             switch (CurrentSetpoint)
@@ -517,10 +528,10 @@ namespace Games.Reefscape.Robots
 
         private IEnumerator PlaceCoroutine()
         {
-            if (_alreadyPlaced) yield break;
-            
+            if (_alreadyPlaced || _isScoring) yield break;
+            if (!TryPlaceGamePiece()) yield break;
+
             _isScoring = true;
-            PlaceGamePiece();
 
             // Reversed logic: Scored speed is the opposite of whatever the current mode's intake direction is
             float currentIntakeDirection = (CurrentRobotMode == ReefscapeRobotMode.Algae) ? 1f : -1f;
@@ -538,11 +549,11 @@ namespace Games.Reefscape.Robots
             _isScoring = false;
         }
 
-        private void PlaceGamePiece()
+        private bool TryPlaceGamePiece()
         {
             if (_alreadyPlaced)
             {
-                return;
+                return false;
             }
 
             if (CurrentRobotMode == ReefscapeRobotMode.Coral && coralController.HasPiece())
@@ -575,15 +586,20 @@ namespace Games.Reefscape.Robots
                     maxSpeed = 0.4f;
                 }
 
-                coralController.ReleaseGamePieceWithContinuedForce(force, time, maxSpeed);
-                _alreadyPlaced = true;
+                _alreadyPlaced = coralController.ReleaseGamePieceWithContinuedForce(
+                    force,
+                    time,
+                    maxSpeed);
+                return _alreadyPlaced;
             }
             else if ((CurrentRobotMode == ReefscapeRobotMode.Algae && algaeController.HasPiece()) || !coralController.HasPiece() && algaeController.HasPiece())
             {
                 Vector3 force = new Vector3(0, 4.0f, 0);
-                algaeController.ReleaseGamePieceWithForce(force);
-                _alreadyPlaced = true;
+                _alreadyPlaced = algaeController.ReleaseGamePieceWithForce(force);
+                return _alreadyPlaced;
             }
+
+            return false;
         }
 
         private void AlgaeSlider()

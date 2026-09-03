@@ -8,13 +8,27 @@ namespace MoSimRL.Tests
     public class RlBridgeContractTests
     {
         [Test]
-        public void ManipulatorIntentUsesHoldForIntakeAndEdgeForPlace()
+        public void ManipulatorIntentUsesHoldForIntakeAndReliableGamepadPlace()
         {
             Assert.That(new ExternalRobotCommand { ManipulatorIntent = 0.34f }.IntakePressed, Is.True);
             Assert.That(new ExternalRobotCommand { ManipulatorIntent = 0.33f }.IntakePressed, Is.False);
             Assert.That(ExternalRobotCommand.IsPlaceRisingEdge(-0.34f, 0f), Is.True);
             Assert.That(ExternalRobotCommand.IsPlaceRisingEdge(-1f, -0.5f), Is.False);
             Assert.That(ExternalRobotCommand.IsPlaceRisingEdge(-0.33f, 0f), Is.False);
+            Assert.That(
+                new ExternalRobotCommand
+                {
+                    HasGamepadControls = true,
+                    ManipulatorIntent = -0.34f
+                }.PlacePressed,
+                Is.True);
+            Assert.That(
+                new ExternalRobotCommand
+                {
+                    HasGamepadControls = false,
+                    ManipulatorIntent = -1f
+                }.PlacePressed,
+                Is.False);
         }
 
         [Test]
