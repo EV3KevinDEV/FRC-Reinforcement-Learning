@@ -66,7 +66,7 @@ class RandomGamepadActor:
         if self._rng.random() < 0.05:
             button = str(
                 self._rng.choice(
-                    ["SOUTH", "EAST", "WEST", "NORTH", "DPAD_DOWN", "DPAD_RIGHT"]
+                    ["SOUTH", "EAST", "WEST", "NORTH", "DPAD_DOWN"]
                 )
             )
             action[BUTTON_INDEX[button]] = 1.0

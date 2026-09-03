@@ -60,7 +60,7 @@ GAMEPAD_ACTIVE_MASK = np.asarray(
         True,  # BACK: exit physical-controller example
         True,  # DPAD_DOWN: stow
         True,  # DPAD_LEFT: toggle normal/L1 intake mode
-        True,  # DPAD_RIGHT: station-source toggle
+        False,  # DPAD_RIGHT: reserved, intentionally unbound
         True,  # DPAD_UP: toggle coral/algae mode
         True,  # EAST: L2
         False,  # GUIDE

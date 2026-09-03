@@ -72,7 +72,6 @@ class PhysicalGamepad:
             "BACK": pygame.CONTROLLER_BUTTON_BACK,
             "DPAD_DOWN": pygame.CONTROLLER_BUTTON_DPAD_DOWN,
             "DPAD_LEFT": pygame.CONTROLLER_BUTTON_DPAD_LEFT,
-            "DPAD_RIGHT": pygame.CONTROLLER_BUTTON_DPAD_RIGHT,
             "DPAD_UP": pygame.CONTROLLER_BUTTON_DPAD_UP,
             "EAST": pygame.CONTROLLER_BUTTON_B,
             "GUIDE": pygame.CONTROLLER_BUTTON_GUIDE,

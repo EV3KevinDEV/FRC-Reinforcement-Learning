@@ -93,7 +93,7 @@ To watch a random policy in real time:
 conda run -n mosim-rl mosim-random --graphical --steps 2000
 ```
 
-New policies use a NitroGen-compatible gamepad action by default: left stick drive, right-stick X yaw, A/B/X/Y select L1-L4, LT intakes, RT places, D-pad down stows, and D-pad right toggles the coral source. Existing six-action checkpoints remain available with `--action-mode semantic`.
+New policies use a NitroGen-compatible gamepad action by default: left stick drive, right-stick X yaw, A/B/X/Y select L1-L4, LT intakes, RT places, and D-pad down stows. D-pad Right remains reserved in the fixed action layout but is unbound. Existing six-action checkpoints remain available with `--action-mode semantic`.
 
 To drive the exact Gymnasium environment with a connected Xbox/PlayStation-compatible controller:
 
@@ -151,7 +151,8 @@ conda activate mosim-rl
 The teleop collector uses the same Team 118 layout as `controller_driver_control`:
 A/B/X/Y select coral L1-L4; algae B/X select low/high reef pickup, A selects
 stack pickup or processor, and Y selects the barge; LT runs intake, RT scores,
-LB/RB auto-align, and the D-pad controls stow and robot/intake/source modes.
+LB/RB auto-align, and the D-pad controls stow and robot/intake modes. D-pad
+Right is unbound.
 Start saves the current episode early and resets, while Back saves and exits.
 Each new dataset root must not already exist.
 Both the collector and `python/examples/05_controller_driver_control.py` accept

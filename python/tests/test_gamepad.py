@@ -28,12 +28,11 @@ def test_nitrogen_layout_and_drive_axis_mapping() -> None:
     np.testing.assert_allclose(semantic, [0.75, -0.25, 0.5, -1.0, 0.0, -1.0])
 
 
-def test_complete_physical_controller_buttons_are_active() -> None:
+def test_bound_physical_controller_buttons_are_active() -> None:
     for name in (
         "BACK",
         "DPAD_DOWN",
         "DPAD_LEFT",
-        "DPAD_RIGHT",
         "DPAD_UP",
         "LEFT_SHOULDER",
         "LEFT_THUMB",
@@ -42,6 +41,7 @@ def test_complete_physical_controller_buttons_are_active() -> None:
         "START",
     ):
         assert GAMEPAD_ACTIVE_MASK[BUTTON_INDEX[name]]
+    assert not GAMEPAD_ACTIVE_MASK[BUTTON_INDEX["DPAD_RIGHT"]]
 
 
 def test_face_buttons_select_persistent_scoring_levels() -> None:
@@ -80,7 +80,7 @@ def test_right_trigger_takes_over_immediately_when_left_trigger_releases() -> No
     assert score[4] == np.float32(-0.9)
 
 
-def test_triggers_and_station_toggle_match_mosim_gamepad_behavior() -> None:
+def test_triggers_and_unbound_dpad_right_match_mosim_gamepad_behavior() -> None:
     adapter = GamepadActionAdapter()
     intake = adapter.to_semantic(action(LEFT_TRIGGER=0.8))
     assert intake[3] == np.float32(-0.6)
@@ -92,12 +92,9 @@ def test_triggers_and_station_toggle_match_mosim_gamepad_behavior() -> None:
     place = adapter.to_semantic(action(RIGHT_TRIGGER=0.9))
     assert place[4] == np.float32(-0.9)
 
-    station = adapter.to_semantic(action(DPAD_RIGHT=1.0))
+    unbound = adapter.to_semantic(action(DPAD_RIGHT=1.0))
     held = adapter.to_semantic(action(DPAD_RIGHT=1.0))
-    adapter.to_semantic(action())
-    ground = adapter.to_semantic(action(DPAD_RIGHT=1.0))
-    assert station[5] == held[5] == 1.0
-    assert ground[5] == -1.0
+    assert unbound[5] == held[5] == -1.0
 
 
 def test_left_trigger_preserves_selected_algae_pickup_position() -> None:
@@ -141,6 +138,7 @@ def test_random_gamepad_actor_is_sparse_coherent_and_seeded() -> None:
     stick_changes = np.count_nonzero(np.any(np.diff(actions_a[:, :4], axis=0), axis=1))
     assert 5 <= stick_changes <= 40
     assert np.count_nonzero(actions_a[:, 4:] > 0.5) > 0
+    assert np.count_nonzero(actions_a[:, BUTTON_INDEX["DPAD_RIGHT"]]) == 0
 
 
 def test_scripted_gamepad_demo_exercises_every_active_control_group() -> None:
@@ -155,10 +153,10 @@ def test_scripted_gamepad_demo_exercises_every_active_control_group() -> None:
         90: "NORTH",
         100: "LEFT_TRIGGER",
         130: "RIGHT_TRIGGER",
-        145: "DPAD_RIGHT",
         160: "DPAD_DOWN",
     }.items():
         assert actions[step, BUTTON_INDEX[button]] > 0.5
+    assert np.count_nonzero(actions[:, BUTTON_INDEX["DPAD_RIGHT"]]) == 0
 
 
 def test_scripted_pickup_holds_only_the_normal_intake_binding() -> None:

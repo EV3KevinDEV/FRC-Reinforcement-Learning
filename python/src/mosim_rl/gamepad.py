@@ -30,7 +30,6 @@ class GamepadActionAdapter:
 
     button_threshold: float = 0.5
     target_setpoint: int = 0
-    station_mode: bool = False
     previous_pressed: np.ndarray = field(
         default_factory=lambda: np.zeros(len(NITROGEN_BUTTONS), dtype=bool)
     )
@@ -38,7 +37,6 @@ class GamepadActionAdapter:
 
     def reset(self) -> None:
         self.target_setpoint = 0
-        self.station_mode = False
         self.previous_pressed.fill(False)
         self.target_button_stack.clear()
 
@@ -81,9 +79,6 @@ class GamepadActionAdapter:
                 self.target_button_stack[-1]
             ]
 
-        if rose("DPAD_RIGHT"):
-            self.station_mode = not self.station_mode
-
         left_trigger = float(gamepad[BUTTON_INDEX["LEFT_TRIGGER"]])
         right_trigger = float(gamepad[BUTTON_INDEX["RIGHT_TRIGGER"]])
         if held("LEFT_TRIGGER"):
@@ -107,7 +102,7 @@ class GamepadActionAdapter:
                 -gamepad[2],  # MoSim's right-stick X binding is inverted
                 self._target_value(self.target_setpoint),
                 manipulator,
-                1.0 if self.station_mode else -1.0,
+                -1.0,  # ground source; D-pad Right is intentionally unbound
             ],
             dtype=np.float32,
         )

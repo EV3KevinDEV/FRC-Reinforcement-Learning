@@ -99,7 +99,6 @@ def main() -> None:
             print("  D-pad down     stow")
             print("  D-pad up       toggle coral/algae mode")
             print("  D-pad left     toggle normal/L1 intake mode")
-            print("  D-pad right    toggle ground/station source")
             print("  LB/RB           hold auto-align left/right")
             print("  Left stick     click to cycle climb state")
             print("  Right stick    click to flip robot camera")

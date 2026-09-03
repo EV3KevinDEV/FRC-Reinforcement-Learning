@@ -34,8 +34,6 @@ def scripted_gamepad_action(step: int) -> np.ndarray:
         action[BUTTON_INDEX["LEFT_TRIGGER"]] = 0.9
     elif 130 <= phase < 135:
         action[BUTTON_INDEX["RIGHT_TRIGGER"]] = 0.9
-    elif phase == 145:
-        action[BUTTON_INDEX["DPAD_RIGHT"]] = 1.0
     elif phase == 160:
         action[BUTTON_INDEX["DPAD_DOWN"]] = 1.0
     return action
