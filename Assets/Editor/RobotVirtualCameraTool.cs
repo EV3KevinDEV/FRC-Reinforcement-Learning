@@ -29,8 +29,8 @@ namespace MoSimulator.EditorTools
         private string _cameraId = "front";
         private Vector3 _localPosition = new(0f, 0.5f, 0.5f);
         private Vector3 _localEulerAngles = Vector3.zero;
-        private int _imageWidth = 320;
-        private int _imageHeight = 180;
+        private int _imageWidth = 640;
+        private int _imageHeight = 360;
         private float _verticalFieldOfView = 70f;
         private float _nearClip = 0.03f;
         private float _farClip = 50f;

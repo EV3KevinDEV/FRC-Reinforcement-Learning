@@ -56,8 +56,8 @@ Its response contains zero or more cameras sorted by case-sensitive name:
     "cameras": [
       {
         "name": "front",
-        "width": 320,
-        "height": 180,
+        "width": 640,
+        "height": 360,
         "vertical_fov_degrees": 70.0,
         "near_clip": 0.03,
         "far_clip": 50.0,
@@ -95,8 +95,8 @@ Frame response:
     "camera_rendering_available": true,
     "camera_frame": {
       "name": "front",
-      "width": 320,
-      "height": 180,
+      "width": 640,
+      "height": 360,
       "encoding": "jpeg",
       "media_type": "image/jpeg",
       "image_base64": "/9j/4AAQSkZJRg...",

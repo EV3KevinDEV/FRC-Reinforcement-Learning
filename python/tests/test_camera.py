@@ -11,8 +11,8 @@ def test_camera_info_parses_robot_relative_calibration() -> None:
     info = VirtualCameraInfo.from_payload(
         {
             "name": "front",
-            "width": 320,
-            "height": 180,
+            "width": 640,
+            "height": 360,
             "vertical_fov_degrees": 70.0,
             "near_clip": 0.03,
             "far_clip": 50.0,
@@ -31,8 +31,8 @@ def test_camera_frame_decodes_and_saves_jpeg(tmp_path) -> None:
     frame = VirtualCameraFrame.from_payload(
         {
             "name": "front",
-            "width": 320,
-            "height": 180,
+            "width": 640,
+            "height": 360,
             "encoding": "jpeg",
             "media_type": "image/jpeg",
             "image_base64": base64.b64encode(jpeg).decode("ascii"),
@@ -51,8 +51,8 @@ def test_camera_frame_rejects_invalid_base64() -> None:
         VirtualCameraFrame.from_payload(
             {
                 "name": "front",
-                "width": 320,
-                "height": 180,
+                "width": 640,
+                "height": 360,
                 "encoding": "jpeg",
                 "media_type": "image/jpeg",
                 "image_base64": "%%not-base64%%",

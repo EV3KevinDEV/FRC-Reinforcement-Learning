@@ -34,7 +34,7 @@ The tool immediately edits and saves the selected prefab asset. It creates a chi
 | **Mount transform** | Robot transform that owns the camera | Use `<Robot Root>` for a chassis-fixed view. Select an arm, wrist, intake, or other child when the camera should move with that mechanism. |
 | **Local position** | Position relative to the mount, in metres | Unity uses `+X` right, `+Y` up, and `+Z` forward. Start clear of bumpers and robot geometry. |
 | **Local rotation** | Euler rotation relative to the mount, in degrees | The camera looks along its local `+Z` axis. The Scene preview is the safest way to aim it. |
-| **Image width/height** | JPEG output resolution | Width may be `16`–`640`; height may be `16`–`480`. Start with `320 x 180`. |
+| **Image width/height** | JPEG output resolution | Width may be `16`–`640`; height may be `16`–`480`. Start with `640 x 360`. |
 | **Vertical field of view** | Vertical lens angle | `70°` is a useful starting point. Increase it for more coverage or decrease it for a tighter view. |
 | **Near clip** | Closest rendered distance, in metres | Start at `0.03`. Raise it only if very close geometry causes problems. |
 | **Far clip** | Farthest rendered distance, in metres | Start at `50`. It must be greater than the near clip distance. |
@@ -51,7 +51,7 @@ Use this as a starting point, then adjust it against the actual robot model:
 | Mount transform | `<Robot Root>` |
 | Local position | `(0, 0.6, 0.5)` |
 | Local rotation | `(0, 0, 0)` |
-| Image size | `320 x 180` |
+| Image size | `640 x 360` |
 | Vertical FOV | `70` |
 | Near / far clip | `0.03 / 50` |
 
@@ -59,13 +59,13 @@ Before adding it, inspect the cyan frustum from the side and from above. The ori
 
 ### Team 118 Limelight cameras
 
-These three cameras were added with **MoSimulator > RL > Virtual Camera Tool** and are currently mounted at the robot root. Their positions and rotations are intentionally editable in the Scene view; after changing them, save the prefab and rebuild the graphical player.
+These cameras were added with **MoSimulator > RL > Virtual Camera Tool** and are currently mounted at the robot root. Their positions and rotations are intentionally editable in the Scene view; after changing them, save the prefab and rebuild the graphical player.
 
 | Camera ID | Output | Vertical FOV | Mount |
 |---|---|---|---|
-| `LimeLightFrontLeft` | `320 x 180` JPEG | `82°` | `<Robot Root>` |
-| `LimelightLeftBack` | `320 x 180` JPEG | `82°` | `<Robot Root>` |
-| `LimelightRightBack` | `320 x 180` JPEG | `82°` | `<Robot Root>` |
+| `LimeLightFrontLeft` | `640 x 360` JPEG | `82°` | `<Robot Root>` |
+| `LimelightLeftBack` | `640 x 360` JPEG | `82°` | `<Robot Root>` |
+| `LimelightRightBack` | `640 x 360` JPEG | `82°` | `<Robot Root>` |
 
 Query the exact robot-relative poses with `list_virtual_cameras()`. The IDs must match capitalization exactly when passed to Python or `mosim-camera-preview`.
 
@@ -75,7 +75,7 @@ Query the exact robot-relative poses with `list_virtual_cameras()`. The IDs must
 - Mount to a moving child transform only when that motion is intentional. Its reported pose and captured view will follow the mechanism.
 - Keep the lens just outside visible robot geometry to prevent the frame from being blocked.
 - Use separate IDs for purpose-specific views, such as `frontNav`, `intakeView`, and `rearAlign`.
-- Start at `320 x 180`, 10 FPS, and JPEG quality 80–85. Increase resolution or quality only when the task needs the extra detail.
+- Start at `640 x 360`, 10 FPS, and JPEG quality 80–85. Increase resolution or quality only when the task needs the extra detail.
 - Prefer a moderate field of view. Very wide views cover more area but make distant game pieces occupy fewer pixels.
 
 ## Build and preview the camera

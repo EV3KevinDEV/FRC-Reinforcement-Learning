@@ -17,8 +17,8 @@ namespace MoSimRL
         public const int MaximumHeight = 480;
 
         [SerializeField] private string cameraId = "front";
-        [SerializeField] private int imageWidth = 320;
-        [SerializeField] private int imageHeight = 180;
+        [SerializeField] private int imageWidth = 640;
+        [SerializeField] private int imageHeight = 360;
 
         private Camera _camera;
         private long _captureSequence;

@@ -108,13 +108,13 @@ namespace MoSimRL.Tests
                 sensorCamera.nearClipPlane = 0.05f;
                 sensorCamera.farClipPlane = 40f;
                 var virtualCamera = cameraObject.AddComponent<RobotVirtualCamera>();
-                virtualCamera.Configure("front", 320, 180);
+                virtualCamera.Configure("front", 640, 360);
 
                 var info = virtualCamera.BuildInfo(robot.transform);
 
                 Assert.That(info.name, Is.EqualTo("front"));
-                Assert.That(info.width, Is.EqualTo(320));
-                Assert.That(info.height, Is.EqualTo(180));
+                Assert.That(info.width, Is.EqualTo(640));
+                Assert.That(info.height, Is.EqualTo(360));
                 Assert.That(info.vertical_fov_degrees, Is.EqualTo(72f));
                 Assert.That(info.robot_position, Is.EqualTo(new[] { 0.2f, 0.5f, 0.4f })
                     .Within(0.0001f));
@@ -138,8 +138,8 @@ namespace MoSimRL.Tests
                 camera_frame = new RlCameraFrameDto
                 {
                     name = "front",
-                    width = 320,
-                    height = 180,
+                    width = 640,
+                    height = 360,
                     image_base64 = "anBlZw==",
                     sequence = 3,
                     sim_time = 1.5f

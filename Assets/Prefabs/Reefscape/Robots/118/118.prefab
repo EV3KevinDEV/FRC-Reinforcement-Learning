@@ -2835,8 +2835,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cameraId: LimelightLeftBack
-  imageWidth: 320
-  imageHeight: 180
+  imageWidth: 640
+  imageHeight: 360
 --- !u!114 &3678515938730982448
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5476,8 +5476,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cameraId: front
-  imageWidth: 320
-  imageHeight: 180
+  imageWidth: 640
+  imageHeight: 360
 --- !u!1 &272673742565500989
 GameObject:
   m_ObjectHideFlags: 0
@@ -43304,8 +43304,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cameraId: LimelightRightBack
-  imageWidth: 320
-  imageHeight: 180
+  imageWidth: 640
+  imageHeight: 360
 --- !u!114 &532101741542325523
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -127482,8 +127482,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cameraId: back
-  imageWidth: 320
-  imageHeight: 180
+  imageWidth: 640
+  imageHeight: 360
 --- !u!1 &6234985655849572069
 GameObject:
   m_ObjectHideFlags: 0
@@ -172304,8 +172304,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cameraId: LimeLightFrontLeft
-  imageWidth: 320
-  imageHeight: 180
+  imageWidth: 640
+  imageHeight: 360
 --- !u!114 &2658440617791775546
 MonoBehaviour:
   m_ObjectHideFlags: 0
