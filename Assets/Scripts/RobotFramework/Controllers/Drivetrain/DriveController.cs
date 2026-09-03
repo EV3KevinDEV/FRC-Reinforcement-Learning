@@ -209,16 +209,25 @@ namespace RobotFramework.Controllers.Drivetrain
                 str = 0;
                 rotation = 0;
             }
+            else if (overideActive)
+            {
+                // Auto-align and other closed-loop overrides own this physics
+                // tick, including when commands normally come from the RL bridge.
+                overideActive = false;
+            }
             else if (_robotBase.ExternalControlEnabled)
             {
                 var translation = _robotBase.ReadTranslationInput();
-                fwd = translation.x;
-                str = translation.y;
+                if (_robotBase.IsFieldCentric)
+                {
+                    GetExternalFieldRelativeInput(translation);
+                }
+                else
+                {
+                    fwd = translation.x;
+                    str = translation.y;
+                }
                 rotation = _robotBase.ReadRotationInput() * steerMultiplier * rotationSpeedMultiplier;
-            }
-            else if (overideActive)
-            {
-                overideActive = false;
             }
             else 
             {
@@ -250,6 +259,17 @@ namespace RobotFramework.Controllers.Drivetrain
             RunSwerveModuleSphere(BR_MODULE);
             
             speedDebug = _rb.velocity.magnitude * METERS_TO_FEET;
+        }
+
+        private void GetExternalFieldRelativeInput(Vector2 translation)
+        {
+            // The Reefscape field's forward axis is Unity X and its lateral
+            // axis is Unity Z. Convert that fixed field vector into the robot's
+            // local frame, where drive forward is Z and strafe is X.
+            var fieldInput = new Vector3(-translation.x, 0f, -translation.y);
+            var robotRelative = transform.InverseTransformDirection(fieldInput);
+            fwd = robotRelative.z;
+            str = robotRelative.x;
         }
 
         public void overideInput(Vector2 input, float rotation, DriveMode mode)

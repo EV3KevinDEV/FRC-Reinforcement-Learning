@@ -78,7 +78,7 @@ namespace RobotFramework.Controllers.Lighting
                 LEDs.SetFloat("_intensity", 20);
                  LEDs.SetTexture("_Texture2D", Climbed);
              }
-             else if (ReefscapeRobotBase.AutoAlignLeftAction.IsPressed() || ReefscapeRobotBase.AutoAlignRightAction.IsPressed())
+             else if (ReefscapeRobotBase.IsAutoAlignLeftPressed() || ReefscapeRobotBase.IsAutoAlignRightPressed())
              {
                 LEDs.SetFloat("_X", 0);
                 LEDs.SetFloat("_Y", 0.0f);
@@ -106,7 +106,7 @@ namespace RobotFramework.Controllers.Lighting
                 LEDs.SetFloat("_intensity", 20);
                  LEDs.SetTexture("_Texture2D", hasCoral);
              }
-             else if (ReefscapeRobotBase.IntakeAction.IsPressed())
+             else if (ReefscapeRobotBase.IsIntakePressed())
              {
                  if (ReefscapeRobotBase.CurrentIntakeMode == ReefscapeIntakeMode.Normal){
                      LEDs.SetFloat("_X", 0);

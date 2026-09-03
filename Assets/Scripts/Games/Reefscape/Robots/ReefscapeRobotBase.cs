@@ -54,6 +54,22 @@ namespace Games.Reefscape.Robots
 
         public bool ExternalStationMode => ExternalControlEnabled && ExternalCommand.StationMode;
 
+        public bool IsAutoAlignLeftPressed() => ExternalControlEnabled
+            ? ExternalCommand.AutoAlignLeft
+            : AutoAlignLeftAction.IsPressed();
+
+        public bool IsAutoAlignRightPressed() => ExternalControlEnabled
+            ? ExternalCommand.AutoAlignRight
+            : AutoAlignRightAction.IsPressed();
+
+        public bool WasAutoAlignLeftTriggered() => ExternalControlEnabled
+            ? ExternalCommand.AutoAlignLeftPulse
+            : AutoAlignLeftAction.triggered;
+
+        public bool WasAutoAlignRightTriggered() => ExternalControlEnabled
+            ? ExternalCommand.AutoAlignRightPulse
+            : AutoAlignRightAction.triggered;
+
         public ReefscapeRobotMode CurrentRobotMode { get; private set; }
         public ReefscapeIntakeMode CurrentIntakeMode { get; private set; }
         [field: SerializeField] public CoralStationMode CurrentCoralStationMode { get; private set; }
@@ -278,8 +294,32 @@ namespace Games.Reefscape.Robots
 
         private void ApplyExternalControl()
         {
-            CurrentRobotMode = ReefscapeRobotMode.Coral;
-            CurrentIntakeMode = ReefscapeIntakeMode.Normal;
+            var targetSelected = ConsumeExternalTargetSelection();
+            var climbRequested = false;
+            if (ExternalCommand.HasGamepadControls)
+            {
+                if (ConsumeExternalRobotModeToggle())
+                {
+                    CurrentRobotMode = CurrentRobotMode == ReefscapeRobotMode.Coral
+                        ? ReefscapeRobotMode.Algae
+                        : ReefscapeRobotMode.Coral;
+                }
+
+                if (ConsumeExternalIntakeModeToggle() &&
+                    RobotGamePieceController.GetPieceByName("Coral").currentStateNum == 0)
+                {
+                    CurrentIntakeMode = CurrentIntakeMode == ReefscapeIntakeMode.Normal
+                        ? ReefscapeIntakeMode.L1
+                        : ReefscapeIntakeMode.Normal;
+                }
+
+                climbRequested = ConsumeExternalClimbPulse();
+            }
+            else
+            {
+                CurrentRobotMode = ReefscapeRobotMode.Coral;
+                CurrentIntakeMode = ReefscapeIntakeMode.Normal;
+            }
 
             if (CurrentCoralStationMode != null)
             {
@@ -287,6 +327,44 @@ namespace Games.Reefscape.Robots
                     BaseGameManager.Instance.GameState != GameState.Auto && ExternalCommand.StationMode
                         ? DropType.Station
                         : DropType.Ground;
+            }
+
+            if (ExternalCommand.HasGamepadControls)
+            {
+                // Apply independent controls from the same gamepad sample
+                // before resolving mutually exclusive final mechanism states.
+                // This keeps a face-button selection from being consumed and
+                // discarded when RT or the climb button arrives with it.
+                if (targetSelected)
+                {
+                    ApplyExternalGamepadSelection();
+                }
+
+                if (climbRequested)
+                {
+                    SetState(CurrentSetpoint switch
+                    {
+                        ReefscapeSetpoints.Climb => ReefscapeSetpoints.Climbed,
+                        ReefscapeSetpoints.Climbed => ReefscapeSetpoints.Stow,
+                        _ => ReefscapeSetpoints.Climb
+                    });
+                    return;
+                }
+
+                if (IsPlacePressed())
+                {
+                    if (CurrentSetpoint != ReefscapeSetpoints.Place)
+                    {
+                        SetState(ReefscapeSetpoints.Place);
+                    }
+                    return;
+                }
+
+                if (IsAutoAlignLeftPressed() || IsAutoAlignRightPressed())
+                {
+                    CheckFacingReef();
+                }
+                return;
             }
 
             if (IsPlacePressed())
@@ -309,7 +387,8 @@ namespace Games.Reefscape.Robots
                 _ => ReefscapeSetpoints.Stow
             };
 
-            if (desiredSetpoint is ReefscapeSetpoints.L2 or ReefscapeSetpoints.L3 or ReefscapeSetpoints.L4)
+            if (desiredSetpoint is ReefscapeSetpoints.L2 or ReefscapeSetpoints.L3 or ReefscapeSetpoints.L4 ||
+                IsAutoAlignLeftPressed() || IsAutoAlignRightPressed())
             {
                 CheckFacingReef();
             }
@@ -317,6 +396,84 @@ namespace Games.Reefscape.Robots
             if (CurrentSetpoint != desiredSetpoint)
             {
                 SetState(desiredSetpoint);
+            }
+        }
+
+        private void ApplyExternalGamepadSelection()
+        {
+            var coralState = RobotGamePieceController.GetPieceByName("Coral").currentStateNum;
+            var algaeState = RobotGamePieceController.GetPieceByName("Algae").currentStateNum;
+
+            switch (ExternalCommand.TargetSetpoint)
+            {
+                case 0:
+                    SetState(ReefscapeSetpoints.Stow);
+                    break;
+                case 1:
+                    SetState(ReefscapeSetpoints.Intake);
+                    break;
+                case 2:
+                    if (coralState == 0 && algaeState == 0)
+                    {
+                        SetState(CurrentSetpoint == ReefscapeSetpoints.Stow &&
+                                 CurrentRobotMode == ReefscapeRobotMode.Algae
+                            ? ReefscapeSetpoints.Stack
+                            : ReefscapeSetpoints.Stow);
+                    }
+                    else
+                    {
+                        SetState(algaeState > 0
+                            ? ReefscapeSetpoints.Processor
+                            : ReefscapeSetpoints.L1);
+                    }
+                    break;
+                case 3:
+                    CheckFacingReef();
+                    if (CurrentSetpoint is ReefscapeSetpoints.L2 or ReefscapeSetpoints.LowAlgae)
+                    {
+                        SetState(ReefscapeSetpoints.Stow);
+                    }
+                    else
+                    {
+                        var useAlgaeSetpoint = coralState == 0 ||
+                                               CurrentRobotMode == ReefscapeRobotMode.Algae && superCycler;
+                        SetState(useAlgaeSetpoint
+                            ? ReefscapeSetpoints.LowAlgae
+                            : ReefscapeSetpoints.L2);
+                    }
+                    break;
+                case 4:
+                    CheckFacingReef();
+                    if (CurrentSetpoint is ReefscapeSetpoints.L3 or ReefscapeSetpoints.HighAlgae)
+                    {
+                        SetState(ReefscapeSetpoints.Stow);
+                    }
+                    else
+                    {
+                        var useAlgaeSetpoint = coralState == 0 ||
+                                               CurrentRobotMode == ReefscapeRobotMode.Algae && superCycler;
+                        SetState(useAlgaeSetpoint
+                            ? ReefscapeSetpoints.HighAlgae
+                            : ReefscapeSetpoints.L3);
+                    }
+                    break;
+                case 5:
+                    CheckFacingReef();
+                    if (CurrentSetpoint is ReefscapeSetpoints.L4 or ReefscapeSetpoints.Barge)
+                    {
+                        SetState(ReefscapeSetpoints.Stow);
+                    }
+                    else if (algaeState > 0 || coralState > 0)
+                    {
+                        var useAlgaeSetpoint = coralState == 0 ||
+                                               CurrentRobotMode == ReefscapeRobotMode.Algae && superCycler;
+                        SetState(useAlgaeSetpoint
+                            ? algaeState > 0
+                                ? ReefscapeSetpoints.Barge
+                                : ReefscapeSetpoints.Stow
+                            : ReefscapeSetpoints.L4);
+                    }
+                    break;
             }
         }
 

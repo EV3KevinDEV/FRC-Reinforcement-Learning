@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using MoSimCore;
 using UnityEngine;
 
 namespace MoSimRL
@@ -16,14 +17,18 @@ namespace MoSimRL
     public sealed class RlTcpServer : IDisposable
     {
         private const int MaxFrameBytes = 1 << 20;
+        private const int MaxControlDatagramBytes = 4096;
         private readonly IPAddress _address;
         private readonly int _port;
         private static readonly UTF8Encoding StrictUtf8 = new(false, true);
         private readonly ConcurrentQueue<byte[]> _requests = new();
+        private readonly ConcurrentQueue<byte[]> _realtimeControls = new();
         private readonly object _writeLock = new();
         private TcpListener _listener;
+        private UdpClient _controlListener;
         private TcpClient _client;
         private Thread _thread;
+        private Thread _controlThread;
         private volatile bool _stopping;
 
         public RlTcpServer(string host, int port)
@@ -39,12 +44,31 @@ namespace MoSimRL
         {
             _listener = new TcpListener(_address, _port);
             _listener.Start(1);
+            try
+            {
+                // TCP remains the reliable request/response protocol. UDP on the
+                // same numeric port carries only the latest realtime controller
+                // sample, so camera responses can never head-of-line block driving.
+                _controlListener = new UdpClient(new IPEndPoint(_address, _port));
+            }
+            catch
+            {
+                _listener.Stop();
+                _listener = null;
+                throw;
+            }
             _thread = new Thread(ServerLoop)
             {
                 IsBackground = true,
                 Name = $"MoSim RL TCP {_port}"
             };
+            _controlThread = new Thread(ControlLoop)
+            {
+                IsBackground = true,
+                Name = $"MoSim RL realtime control UDP {_port}"
+            };
             _thread.Start();
+            _controlThread.Start();
         }
 
         public bool TryDequeue(out RlRequest request)
@@ -71,6 +95,31 @@ namespace MoSimRL
                         error = "invalid_request",
                         payload = new RlResponsePayload()
                     });
+                }
+            }
+            return false;
+        }
+
+        public bool TryDequeueRealtimeControl(out RlRealtimeControl control)
+        {
+            control = null;
+            while (_realtimeControls.TryDequeue(out var payload))
+            {
+                try
+                {
+                    control = JsonUtility.FromJson<RlRealtimeControl>(
+                        StrictUtf8.GetString(payload));
+                    if (control == null || control.v != RlRuntimeSettings.ProtocolVersion ||
+                        string.IsNullOrWhiteSpace(control.session) || control.sequence <= 0)
+                    {
+                        throw new InvalidDataException("Realtime control envelope is incomplete.");
+                    }
+                    return true;
+                }
+                catch (Exception)
+                {
+                    // Realtime datagrams are intentionally best effort. Ignore a
+                    // malformed packet and continue to the next queued sample.
                 }
             }
             return false;
@@ -131,6 +180,40 @@ namespace MoSimRL
                     if (!_stopping)
                     {
                         Thread.Sleep(100);
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+            }
+        }
+
+        private void ControlLoop()
+        {
+            var remote = new IPEndPoint(IPAddress.Any, 0);
+            while (!_stopping)
+            {
+                try
+                {
+                    var payload = _controlListener.Receive(ref remote);
+                    if (payload.Length == 0 || payload.Length > MaxControlDatagramBytes)
+                    {
+                        continue;
+                    }
+
+                    // Bound memory if the Unity main thread is temporarily paused.
+                    while (_realtimeControls.Count >= 256 &&
+                           _realtimeControls.TryDequeue(out _))
+                    {
+                    }
+                    _realtimeControls.Enqueue(payload);
+                }
+                catch (SocketException)
+                {
+                    if (!_stopping)
+                    {
+                        Thread.Sleep(10);
                     }
                 }
                 catch (ObjectDisposedException)
@@ -219,6 +302,14 @@ namespace MoSimRL
             {
                 // Listener is already closed.
             }
+            try
+            {
+                _controlListener?.Close();
+            }
+            catch (SocketException)
+            {
+                // Listener is already closed.
+            }
             lock (_writeLock)
             {
                 CloseClient();
@@ -226,6 +317,10 @@ namespace MoSimRL
             if (_thread is { IsAlive: true })
             {
                 _thread.Join(1000);
+            }
+            if (_controlThread is { IsAlive: true })
+            {
+                _controlThread.Join(1000);
             }
         }
     }

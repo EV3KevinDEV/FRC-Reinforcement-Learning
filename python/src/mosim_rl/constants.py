@@ -49,34 +49,34 @@ GAMEPAD_ACTION_LOW = np.concatenate(
 )
 GAMEPAD_ACTION_HIGH = np.ones(GAMEPAD_ACTION_DIM, dtype=np.float32)
 
-# Controls used by the coral-focused Team 118 adapter. Keeping inactive buttons
-# in the fixed layout makes actions directly compatible with NitroGen outputs.
+# Controls used by the Team 118 adapter. Keeping inactive synthetic buttons in
+# the fixed layout makes actions directly compatible with NitroGen outputs.
 GAMEPAD_ACTIVE_MASK = np.asarray(
     [
         True,  # left x
         True,  # left y
         True,  # right x
         False,  # right y
-        False,  # BACK
+        True,  # BACK: exit physical-controller example
         True,  # DPAD_DOWN: stow
-        False,  # DPAD_LEFT
+        True,  # DPAD_LEFT: toggle normal/L1 intake mode
         True,  # DPAD_RIGHT: station-source toggle
-        False,  # DPAD_UP
+        True,  # DPAD_UP: toggle coral/algae mode
         True,  # EAST: L2
         False,  # GUIDE
-        False,  # LEFT_SHOULDER
-        False,  # LEFT_THUMB
+        True,  # LEFT_SHOULDER: auto-align left
+        True,  # LEFT_THUMB: cycle climb state
         True,  # LEFT_TRIGGER: intake
         True,  # NORTH: L4
         False,  # RIGHT_BOTTOM
         False,  # RIGHT_LEFT
         False,  # RIGHT_RIGHT
-        False,  # RIGHT_SHOULDER
-        False,  # RIGHT_THUMB
+        True,  # RIGHT_SHOULDER: auto-align right
+        True,  # RIGHT_THUMB: flip robot camera
         True,  # RIGHT_TRIGGER: place
         False,  # RIGHT_UP
         True,  # SOUTH: L1
-        False,  # START
+        True,  # START: reset physical-controller episode
         True,  # WEST: L3
     ],
     dtype=bool,

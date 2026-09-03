@@ -1,5 +1,8 @@
 using System;
+using System.Collections;
+using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 
 namespace MoSimRL
@@ -109,6 +112,160 @@ namespace MoSimRL
                     DestroyImmediate(image);
                 }
             }
+        }
+
+        public IEnumerator CaptureJpegAsync(
+            int quality,
+            Action<byte[]> onComplete,
+            Action<Exception> onError)
+        {
+            if (!GraphicsDeviceAvailable)
+            {
+                onError?.Invoke(new InvalidOperationException(
+                    "No graphics device is available."));
+                yield break;
+            }
+            if (string.IsNullOrWhiteSpace(cameraId))
+            {
+                onError?.Invoke(new InvalidOperationException(
+                    "The virtual camera has no ID."));
+                yield break;
+            }
+
+            var sensorCamera = SensorCamera;
+            var previousTarget = sensorCamera.targetTexture;
+            var previousAspect = sensorCamera.aspect;
+            RenderTexture renderTexture = null;
+            AsyncGPUReadbackRequest readback = default;
+            Task<byte[]> encode = null;
+            byte[] bytes = null;
+            Exception failure = null;
+            try
+            {
+                try
+                {
+                    renderTexture = RenderTexture.GetTemporary(
+                        imageWidth,
+                        imageHeight,
+                        24,
+                        RenderTextureFormat.ARGB32,
+                        RenderTextureReadWrite.sRGB);
+                    sensorCamera.aspect = imageWidth / (float)imageHeight;
+                    Render(sensorCamera, renderTexture);
+                    // GPU readback completes over later player frames instead of
+                    // blocking the Unity update that applies driver controls.
+                    readback = AsyncGPUReadback.Request(
+                        renderTexture,
+                        0,
+                        TextureFormat.RGBA32);
+                }
+                catch (Exception exception)
+                {
+                    failure = exception;
+                }
+
+                if (failure == null)
+                {
+                    while (!readback.done)
+                    {
+                        yield return null;
+                    }
+                    if (readback.hasError)
+                    {
+                        failure = new InvalidOperationException(
+                            "Asynchronous GPU readback failed.");
+                    }
+                }
+
+                byte[] pixels = null;
+                if (failure == null)
+                {
+                    try
+                    {
+                        pixels = readback.GetData<byte>().ToArray();
+                    }
+                    catch (Exception exception)
+                    {
+                        failure = exception;
+                    }
+                }
+
+                if (renderTexture != null)
+                {
+                    RenderTexture.ReleaseTemporary(renderTexture);
+                    renderTexture = null;
+                }
+
+                if (failure == null)
+                {
+                    try
+                    {
+                        // Unity documents EncodeArrayToJPG as thread-safe. Keeping
+                        // it off the player loop prevents three JPEG encodes from
+                        // delaying the next controller command.
+                        var captureWidth = (uint)imageWidth;
+                        var captureHeight = (uint)imageHeight;
+                        var captureQuality = Mathf.Clamp(quality, 1, 95);
+                        encode = Task.Run(() => ImageConversion.EncodeArrayToJPG(
+                            pixels,
+                            GraphicsFormat.R8G8B8A8_SRGB,
+                            captureWidth,
+                            captureHeight,
+                            0,
+                            captureQuality));
+                    }
+                    catch (Exception exception)
+                    {
+                        failure = exception;
+                    }
+                }
+
+                if (encode != null)
+                {
+                    while (!encode.IsCompleted)
+                    {
+                        yield return null;
+                    }
+                    if (encode.IsFaulted)
+                    {
+                        failure = encode.Exception?.GetBaseException() ??
+                                  new InvalidOperationException("JPEG encoding failed.");
+                    }
+                    else
+                    {
+                        try
+                        {
+                            bytes = encode.Result;
+                        }
+                        catch (Exception exception)
+                        {
+                            failure = exception;
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                if (renderTexture != null)
+                {
+                    RenderTexture.ReleaseTemporary(renderTexture);
+                }
+                sensorCamera.targetTexture = previousTarget;
+                sensorCamera.aspect = previousAspect;
+            }
+
+            if (failure == null && (bytes == null || bytes.Length == 0))
+            {
+                failure = new InvalidOperationException("JPEG encoding returned no data.");
+            }
+            if (failure != null)
+            {
+                onError?.Invoke(failure);
+                yield break;
+            }
+
+            _captureSequence++;
+            onComplete?.Invoke(bytes);
         }
 
         private Camera SensorCamera

@@ -154,6 +154,66 @@ namespace RobotFramework
             ? ExternalCommand.PlacePressed
             : OuttakeAction.IsPressed();
 
+        public bool ConsumeExternalTargetSelection()
+        {
+            if (!ExternalControlEnabled || !ExternalCommand.TargetSelectionPulse)
+            {
+                return false;
+            }
+            var command = ExternalCommand;
+            command.TargetSelectionPulse = false;
+            ExternalCommand = command;
+            return true;
+        }
+
+        public bool ConsumeExternalRobotModeToggle()
+        {
+            if (!ExternalControlEnabled || !ExternalCommand.RobotModeTogglePulse)
+            {
+                return false;
+            }
+            var command = ExternalCommand;
+            command.RobotModeTogglePulse = false;
+            ExternalCommand = command;
+            return true;
+        }
+
+        public bool ConsumeExternalIntakeModeToggle()
+        {
+            if (!ExternalControlEnabled || !ExternalCommand.IntakeModeTogglePulse)
+            {
+                return false;
+            }
+            var command = ExternalCommand;
+            command.IntakeModeTogglePulse = false;
+            ExternalCommand = command;
+            return true;
+        }
+
+        public bool ConsumeExternalClimbPulse()
+        {
+            if (!ExternalControlEnabled || !ExternalCommand.ClimbPulse)
+            {
+                return false;
+            }
+            var command = ExternalCommand;
+            command.ClimbPulse = false;
+            ExternalCommand = command;
+            return true;
+        }
+
+        private bool ConsumeExternalCameraFlip()
+        {
+            if (!ExternalControlEnabled || !ExternalCommand.CameraFlipPulse)
+            {
+                return false;
+            }
+            var command = ExternalCommand;
+            command.CameraFlipPulse = false;
+            ExternalCommand = command;
+            return true;
+        }
+
         [Header("Bumper Materials")]
         [SerializeField]
         [Tooltip("Array of MeshRenderer components for bumper coloring.")]
@@ -203,6 +263,10 @@ namespace RobotFramework
         {
             if (ExternalControlEnabled)
             {
+                if (ConsumeExternalCameraFlip())
+                {
+                    FlipActiveCamera();
+                }
                 return;
             }
 
@@ -218,17 +282,19 @@ namespace RobotFramework
 
             if (SwapCameraAction.triggered)
             {
-                // Only flip for third person and first person cameras, not driver station
-                var activeCamera = GetActiveCamera();
-                if (activeCamera != null && activeCamera != DriverStationCam?.CameraObject)
-                {
-                    var baseVCam = activeCamera.GetComponent<BaseVCamScript>();
-                    if (baseVCam != null)
-                    {
-                        baseVCam.FlipCamera();
-                    }
-                }
+                FlipActiveCamera();
             }
+        }
+
+        private void FlipActiveCamera()
+        {
+            // Only flip third-person and robot-perspective cameras.
+            var activeCamera = GetActiveCamera();
+            if (activeCamera == null || activeCamera == DriverStationCam?.CameraObject)
+            {
+                return;
+            }
+            activeCamera.GetComponent<BaseVCamScript>()?.FlipCamera();
         }
 
         /// <summary>

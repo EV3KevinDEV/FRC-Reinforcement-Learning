@@ -1,10 +1,13 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Games.Reefscape.Enums;
 using Games.Reefscape.Robots;
 using Games.Reefscape.Scoring;
+using GameSystems.Cameras;
+using GameSystems.Management;
 using MoSimCore;
 using MoSimCore.BaseClasses.GameManagement;
 using MoSimCore.Enums;
@@ -19,8 +22,22 @@ namespace MoSimRL
     public sealed class RlEnvironmentController : MonoBehaviour
     {
         private const double FinalScoringGraceSeconds = 3.0;
+        private const double RealtimeControlWatchdogSeconds = 0.25;
         private const int MaxCameraJpegBytes = 700_000;
+        private const int GamepadActionDimension = 25;
+        private const int GamepadDpadDown = 5;
+        private const int GamepadDpadLeft = 6;
+        private const int GamepadDpadUp = 8;
+        private const int GamepadEast = 9;
+        private const int GamepadLeftShoulder = 11;
+        private const int GamepadLeftThumb = 12;
+        private const int GamepadNorth = 14;
+        private const int GamepadRightShoulder = 18;
+        private const int GamepadRightThumb = 19;
+        private const int GamepadSouth = 22;
+        private const int GamepadWest = 24;
         private readonly RlScenarioManager _scenario = new();
+        private readonly float[] _previousGamepadAction = new float[GamepadActionDimension];
         private RlTcpServer _server;
         private RlRequest _activeRequest;
         private Robonauts _robot;
@@ -35,8 +52,17 @@ namespace MoSimRL
         private int _previousTotalScore;
         private int _previousCoralScore;
         private float _previousManipulatorIntent;
+        private int _previousTargetSetpoint;
         private int _lastRequestId;
         private bool _environmentReady;
+        private bool _activeRequestAppliedAction;
+        private bool _realtimeControlActive;
+        private string _realtimeControlSession;
+        private long _realtimeControlSequence;
+        private long _appliedRealtimeControlSequence;
+        private double _lastRealtimeControlAt;
+        private float[] _appliedRealtimeAction;
+        private float[] _appliedRealtimeGamepadAction;
 
         private void Awake()
         {
@@ -47,6 +73,8 @@ namespace MoSimRL
 
         private void Update()
         {
+            ProcessRealtimeControls();
+
             if (_operationActive || !_server.TryDequeue(out var request))
             {
                 return;
@@ -81,7 +109,9 @@ namespace MoSimRL
                         decision_dt = RlRuntimeSettings.FrameSkip * RlRuntimeSettings.ControlDeltaTime,
                         frame_skip = RlRuntimeSettings.FrameSkip,
                         virtual_camera_api = true,
-                        camera_rendering_available = CameraRenderingAvailable
+                        camera_rendering_available = CameraRenderingAvailable,
+                        realtime_control_api = RlRuntimeSettings.Realtime,
+                        realtime_control_port = RlRuntimeSettings.Port
                     });
                     break;
                 case "ping":
@@ -91,7 +121,9 @@ namespace MoSimRL
                         fixed_dt = RlRuntimeSettings.FixedDeltaTime,
                         control_dt = RlRuntimeSettings.ControlDeltaTime,
                         decision_dt = RlRuntimeSettings.FrameSkip * RlRuntimeSettings.ControlDeltaTime,
-                        frame_skip = RlRuntimeSettings.FrameSkip
+                        frame_skip = RlRuntimeSettings.FrameSkip,
+                        realtime_control_api = RlRuntimeSettings.Realtime,
+                        realtime_control_port = RlRuntimeSettings.Port
                     });
                     break;
                 case "reset":
@@ -181,7 +213,11 @@ namespace MoSimRL
             // BeginStep runs late in Update. Keep a place edge alive through the
             // full decision so ReefscapeRobotBase.Update and Robonauts.FixedUpdate
             // are guaranteed to observe it before clearing it here.
-            _robot?.ClearExternalPlacePulse();
+            if (_activeRequestAppliedAction)
+            {
+                _robot?.ClearExternalPlacePulse();
+            }
+            _activeRequestAppliedAction = false;
             SendSuccess(request, payload);
             _advanceMatch = false;
             _operationActive = false;
@@ -189,7 +225,20 @@ namespace MoSimRL
 
         private IEnumerator ResetEnvironment(RlRequest request)
         {
+            if (!TryParseCameraMode(request.payload.camera_mode, out var cameraMode))
+            {
+                SendError(request, "invalid_camera_mode");
+                yield break;
+            }
+
+            if (!TryParseDriveMode(request.payload.drive_mode, out var fieldCentric))
+            {
+                SendError(request, "invalid_drive_mode");
+                yield break;
+            }
+
             _environmentReady = false;
+            ResetRealtimeControlState();
             _operationActive = true;
             _advanceMatch = false;
             _activeRequest = request;
@@ -210,6 +259,14 @@ namespace MoSimRL
             yield return new WaitUntil(() => FindRobot() != null && !BaseGameManager.Instance.IsResetting);
 
             _robot.EnableExternalControl(true);
+            if (cameraMode.HasValue)
+            {
+                FindFirstObjectByType<RobotSpawnController>()?.ConfigureRlCamera(cameraMode.Value);
+            }
+            if (fieldCentric.HasValue)
+            {
+                _robot.IsFieldCentric = fieldCentric.Value;
+            }
             _robot.SetExternalCommand(ExternalRobotCommand.Idle);
             if (!RlRuntimeSettings.Graphical)
             {
@@ -228,7 +285,7 @@ namespace MoSimRL
             _simTime = 0d;
             _stepTimingCarry = 0d;
             _endGraceSeconds = 0d;
-            _previousManipulatorIntent = 0f;
+            ResetControlEdges();
             var score = CurrentScore();
             _previousTotalScore = score.TotalPoints;
             _previousCoralScore = score.CoralPoints + score.TroughPoints + score.LeavePoints;
@@ -248,32 +305,62 @@ namespace MoSimRL
                 SendError(request, "invalid_action_shape");
                 return;
             }
+            if (request.payload.gamepad_action != null &&
+                request.payload.gamepad_action.Length != GamepadActionDimension)
+            {
+                SendError(request, "invalid_gamepad_action_shape");
+                return;
+            }
             if (FindRobot() == null)
             {
                 SendError(request, "robot_not_ready");
                 return;
             }
 
-            var action = request.payload.action;
-            var manipulatorIntent = Mathf.Clamp(action[4], -1f, 1f);
-            var command = new ExternalRobotCommand
+            if (request.payload.observe_only)
             {
-                Translation = new Vector2(
-                    Mathf.Clamp(action[0], -1f, 1f),
-                    Mathf.Clamp(action[1], -1f, 1f)),
-                Rotation = Mathf.Clamp(action[2], -1f, 1f),
-                TargetSetpoint = Mathf.Clamp(
-                    Mathf.RoundToInt((Mathf.Clamp(action[3], -1f, 1f) + 1f) * 2.5f),
-                    0,
-                    5),
-                ManipulatorIntent = manipulatorIntent,
-                StationMode = action[5] > 0f,
-                PlacePulse = ExternalRobotCommand.IsPlaceRisingEdge(
-                    manipulatorIntent,
-                    _previousManipulatorIntent)
-            };
-            _previousManipulatorIntent = manipulatorIntent;
+                if (!RlRuntimeSettings.Realtime)
+                {
+                    SendError(request, "observe_only_requires_realtime");
+                    return;
+                }
+                if (!TrySelectCameras(
+                        request.payload.camera_names,
+                        request.payload.jpeg_quality,
+                        out var selectedCameras,
+                        out var cameraError))
+                {
+                    SendError(request, cameraError);
+                    return;
+                }
+
+                // Realtime physics and the match clock advance independently.
+                // Snapshot state, sensors, and the exact command applied at the
+                // start of this Unity update without inserting another 20 ms wait.
+                _stepId++;
+                var samplePayload = BuildStatePayload(false);
+                if (selectedCameras.Length == 0)
+                {
+                    samplePayload.camera_frames = Array.Empty<RlCameraFrameDto>();
+                    SendSuccess(request, samplePayload);
+                    return;
+                }
+
+                _operationActive = true;
+                BeginSynchronizedSample(
+                    request,
+                    samplePayload,
+                    selectedCameras,
+                    request.payload.jpeg_quality,
+                    samplePayload.state.match.sim_time);
+                return;
+            }
+
+            var command = BuildExternalCommand(
+                request.payload.action,
+                request.payload.gamepad_action);
             _robot.SetExternalCommand(command);
+            _activeRequestAppliedAction = true;
 
             _activeRequest = request;
             var controlTicks = Mathf.Clamp(request.payload.frame_skip, 1, 50);
@@ -286,6 +373,201 @@ namespace MoSimRL
             Time.timeScale = RlRuntimeSettings.Realtime
                 ? 1f
                 : RlRuntimeSettings.ActiveTimeScale;
+        }
+
+        private ExternalRobotCommand BuildExternalCommand(float[] action, float[] gamepad)
+        {
+            var manipulatorIntent = Mathf.Clamp(action[4], -1f, 1f);
+            var targetSetpoint = Mathf.Clamp(
+                Mathf.RoundToInt((Mathf.Clamp(action[3], -1f, 1f) + 1f) * 2.5f),
+                0,
+                5);
+            var hasGamepad = gamepad != null;
+            var targetSelectionPulse = hasGamepad &&
+                (targetSetpoint != _previousTargetSetpoint ||
+                 GamepadRising(gamepad, GamepadDpadDown) ||
+                 GamepadRising(gamepad, GamepadSouth) ||
+                 GamepadRising(gamepad, GamepadEast) ||
+                 GamepadRising(gamepad, GamepadWest) ||
+                 GamepadRising(gamepad, GamepadNorth));
+            var command = new ExternalRobotCommand
+            {
+                Translation = new Vector2(
+                    Mathf.Clamp(action[0], -1f, 1f),
+                    Mathf.Clamp(action[1], -1f, 1f)),
+                Rotation = Mathf.Clamp(action[2], -1f, 1f),
+                TargetSetpoint = targetSetpoint,
+                ManipulatorIntent = manipulatorIntent,
+                StationMode = action[5] > 0f,
+                PlacePulse = ExternalRobotCommand.IsPlaceRisingEdge(
+                    manipulatorIntent,
+                    _previousManipulatorIntent),
+                HasGamepadControls = hasGamepad,
+                TargetSelectionPulse = targetSelectionPulse,
+                RobotModeTogglePulse = GamepadRising(gamepad, GamepadDpadUp),
+                IntakeModeTogglePulse = GamepadRising(gamepad, GamepadDpadLeft),
+                ClimbPulse = GamepadRising(gamepad, GamepadLeftThumb),
+                CameraFlipPulse = GamepadRising(gamepad, GamepadRightThumb),
+                AutoAlignLeft = GamepadPressed(gamepad, GamepadLeftShoulder),
+                AutoAlignRight = GamepadPressed(gamepad, GamepadRightShoulder),
+                AutoAlignLeftPulse = GamepadRising(gamepad, GamepadLeftShoulder),
+                AutoAlignRightPulse = GamepadRising(gamepad, GamepadRightShoulder)
+            };
+            _previousManipulatorIntent = manipulatorIntent;
+            _previousTargetSetpoint = targetSetpoint;
+            if (hasGamepad)
+            {
+                Array.Copy(gamepad, _previousGamepadAction, GamepadActionDimension);
+            }
+            else
+            {
+                Array.Clear(_previousGamepadAction, 0, _previousGamepadAction.Length);
+            }
+            return command;
+        }
+
+        private static bool GamepadPressed(float[] gamepad, int index) =>
+            gamepad != null && index >= 0 && index < gamepad.Length && gamepad[index] > 0.5f;
+
+        private bool GamepadRising(float[] gamepad, int index) =>
+            GamepadPressed(gamepad, index) && _previousGamepadAction[index] <= 0.5f;
+
+        private void ProcessRealtimeControls()
+        {
+            if (!RlRuntimeSettings.Realtime)
+            {
+                return;
+            }
+
+            var now = Time.realtimeSinceStartupAsDouble;
+            var pendingCommand = ExternalRobotCommand.Idle;
+            float[] pendingAction = null;
+            float[] pendingGamepad = null;
+            long pendingSequence = 0;
+            var hasPendingCommand = false;
+            var stopRequested = false;
+
+            while (_server.TryDequeueRealtimeControl(out var control))
+            {
+                if (control.sequence <= 0 || string.IsNullOrWhiteSpace(control.session))
+                {
+                    continue;
+                }
+                if (control.active &&
+                    (control.action == null || control.action.Length != 6 ||
+                     control.gamepad_action == null ||
+                     control.gamepad_action.Length != GamepadActionDimension))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(
+                        control.session,
+                        _realtimeControlSession,
+                        StringComparison.Ordinal))
+                {
+                    _realtimeControlSession = control.session;
+                    _realtimeControlSequence = 0;
+                    ResetControlEdges();
+                    hasPendingCommand = false;
+                }
+                if (control.sequence <= _realtimeControlSequence)
+                {
+                    continue;
+                }
+
+                _realtimeControlSequence = control.sequence;
+                _lastRealtimeControlAt = now;
+                if (!control.active)
+                {
+                    _realtimeControlActive = false;
+                    stopRequested = true;
+                    hasPendingCommand = false;
+                    ResetControlEdges();
+                    continue;
+                }
+
+                _realtimeControlActive = true;
+                stopRequested = false;
+                if (!_environmentReady || FindRobot() == null)
+                {
+                    continue;
+                }
+
+                var nextCommand = BuildExternalCommand(
+                    control.action,
+                    control.gamepad_action);
+                if (hasPendingCommand)
+                {
+                    MergeControlPulses(ref nextCommand, pendingCommand);
+                }
+                pendingCommand = nextCommand;
+                pendingAction = (float[])control.action.Clone();
+                pendingGamepad = (float[])control.gamepad_action.Clone();
+                pendingSequence = control.sequence;
+                hasPendingCommand = true;
+            }
+
+            if (hasPendingCommand)
+            {
+                _robot.SetExternalCommand(pendingCommand);
+                _appliedRealtimeAction = pendingAction;
+                _appliedRealtimeGamepadAction = pendingGamepad;
+                _appliedRealtimeControlSequence = pendingSequence;
+            }
+            else if (stopRequested)
+            {
+                StopRealtimeControl();
+            }
+
+            if (_realtimeControlActive &&
+                now - _lastRealtimeControlAt > RealtimeControlWatchdogSeconds)
+            {
+                StopRealtimeControl();
+            }
+        }
+
+        private static void MergeControlPulses(
+            ref ExternalRobotCommand destination,
+            ExternalRobotCommand source)
+        {
+            destination.PlacePulse |= source.PlacePulse;
+            destination.TargetSelectionPulse |= source.TargetSelectionPulse;
+            destination.RobotModeTogglePulse |= source.RobotModeTogglePulse;
+            destination.IntakeModeTogglePulse |= source.IntakeModeTogglePulse;
+            destination.ClimbPulse |= source.ClimbPulse;
+            destination.CameraFlipPulse |= source.CameraFlipPulse;
+            destination.AutoAlignLeftPulse |= source.AutoAlignLeftPulse;
+            destination.AutoAlignRightPulse |= source.AutoAlignRightPulse;
+        }
+
+        private void StopRealtimeControl()
+        {
+            _realtimeControlActive = false;
+            _appliedRealtimeAction = null;
+            _appliedRealtimeGamepadAction = null;
+            _appliedRealtimeControlSequence = 0;
+            ResetControlEdges();
+            _robot?.SetExternalCommand(ExternalRobotCommand.Idle);
+        }
+
+        private void ResetRealtimeControlState()
+        {
+            _realtimeControlActive = false;
+            _realtimeControlSession = null;
+            _realtimeControlSequence = 0;
+            _appliedRealtimeControlSequence = 0;
+            _lastRealtimeControlAt = 0d;
+            _appliedRealtimeAction = null;
+            _appliedRealtimeGamepadAction = null;
+            ResetControlEdges();
+        }
+
+        private void ResetControlEdges()
+        {
+            _previousManipulatorIntent = 0f;
+            _previousTargetSetpoint = 0;
+            Array.Clear(_previousGamepadAction, 0, _previousGamepadAction.Length);
         }
 
         private RlResponsePayload BuildStatePayload(bool reset)
@@ -318,9 +600,21 @@ namespace MoSimRL
 
             _previousTotalScore = snapshot.TotalPoints;
             _previousCoralScore = coralScore;
+            var controlActive = _realtimeControlActive &&
+                                _appliedRealtimeAction != null &&
+                                _appliedRealtimeGamepadAction != null;
             return new RlResponsePayload
             {
                 worker_id = RlRuntimeSettings.WorkerId,
+                control = controlActive
+                    ? new RlControlSnapshotDto
+                    {
+                        session = _realtimeControlSession,
+                        sequence = _appliedRealtimeControlSequence,
+                        action = (float[])_appliedRealtimeAction.Clone(),
+                        gamepad_action = (float[])_appliedRealtimeGamepadAction.Clone()
+                    }
+                    : null,
                 state = state,
                 events = new RlEventsDto
                 {
@@ -333,7 +627,16 @@ namespace MoSimRL
                     worker_id = RlRuntimeSettings.WorkerId,
                     step_id = _stepId,
                     curriculum_stage = _scenario.Stage,
-                    scenario = _scenario.Scenario
+                    scenario = _scenario.Scenario,
+                    realtime_control_active = controlActive,
+                    realtime_control_sequence = controlActive
+                        ? _appliedRealtimeControlSequence
+                        : 0,
+                    realtime_control_age_ms = controlActive
+                        ? (float)Math.Max(
+                            0d,
+                            (Time.realtimeSinceStartupAsDouble - _lastRealtimeControlAt) * 1000d)
+                        : -1f
                 }
             };
         }
@@ -399,32 +702,12 @@ namespace MoSimRL
             try
             {
                 var camera = matches[0];
-                var jpeg = camera.CaptureJpeg(request.payload.jpeg_quality);
-                if (jpeg == null || jpeg.Length == 0)
-                {
-                    SendError(request, "camera_capture_failed");
-                    return;
-                }
-                if (jpeg.Length > MaxCameraJpegBytes)
-                {
-                    SendError(request, "camera_frame_too_large");
-                    return;
-                }
-
                 SendSuccess(request, new RlResponsePayload
                 {
                     worker_id = RlRuntimeSettings.WorkerId,
                     virtual_camera_api = true,
                     camera_rendering_available = true,
-                    camera_frame = new RlCameraFrameDto
-                    {
-                        name = camera.CameraId,
-                        width = camera.ImageWidth,
-                        height = camera.ImageHeight,
-                        image_base64 = Convert.ToBase64String(jpeg),
-                        sequence = camera.CaptureSequence,
-                        sim_time = (float)_simTime
-                    }
+                    camera_frame = CaptureCameraFrame(camera, request.payload.jpeg_quality)
                 });
             }
             catch (Exception exception)
@@ -542,6 +825,222 @@ namespace MoSimRL
                 }
             }
             return _robot;
+        }
+
+        private static bool TryParseCameraMode(string value, out CameraMode? mode)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                mode = null;
+                return true;
+            }
+
+            switch (value.Trim().ToLowerInvariant())
+            {
+                case "robot":
+                case "first-person":
+                case "first_person":
+                    mode = CameraMode.FirstPerson;
+                    return true;
+                case "third-person":
+                case "third_person":
+                case "field":
+                    mode = CameraMode.ThirdPerson;
+                    return true;
+                case "driver-station":
+                case "driver_station":
+                    mode = CameraMode.DriverStation;
+                    return true;
+                default:
+                    mode = null;
+                    return false;
+            }
+        }
+
+        private bool TrySelectCameras(
+            string[] cameraNames,
+            int jpegQuality,
+            out RobotVirtualCamera[] cameras,
+            out string error)
+        {
+            cameras = Array.Empty<RobotVirtualCamera>();
+            error = null;
+            if (cameraNames == null || cameraNames.Length == 0)
+            {
+                return true;
+            }
+            if (!CameraRenderingAvailable)
+            {
+                error = "camera_rendering_unavailable";
+                return false;
+            }
+            if (jpegQuality is < 1 or > 95)
+            {
+                error = "invalid_jpeg_quality";
+                return false;
+            }
+            if (cameraNames.Length > 8 ||
+                cameraNames.Any(string.IsNullOrWhiteSpace) ||
+                cameraNames.Distinct(StringComparer.Ordinal).Count() != cameraNames.Length)
+            {
+                error = "invalid_camera_names";
+                return false;
+            }
+
+            var available = FindVirtualCameras();
+            var selected = new List<RobotVirtualCamera>(cameraNames.Length);
+            foreach (var cameraName in cameraNames)
+            {
+                var matches = available.Where(camera => string.Equals(
+                    camera.CameraId,
+                    cameraName,
+                    StringComparison.Ordinal)).ToArray();
+                if (matches.Length == 0)
+                {
+                    error = "camera_not_found";
+                    return false;
+                }
+                if (matches.Length > 1)
+                {
+                    error = "camera_name_ambiguous";
+                    return false;
+                }
+                selected.Add(matches[0]);
+            }
+
+            cameras = selected.ToArray();
+            return true;
+        }
+
+        private void BeginSynchronizedSample(
+            RlRequest request,
+            RlResponsePayload payload,
+            RobotVirtualCamera[] cameras,
+            int jpegQuality,
+            float sampleSimTime)
+        {
+            var frames = new RlCameraFrameDto[cameras.Length];
+            var remaining = cameras.Length;
+            string captureError = null;
+
+            void CompleteOne()
+            {
+                remaining--;
+                if (remaining > 0)
+                {
+                    return;
+                }
+
+                try
+                {
+                    if (captureError != null)
+                    {
+                        SendError(request, captureError);
+                        return;
+                    }
+                    payload.camera_frames = frames;
+                    try
+                    {
+                        SendSuccess(request, payload);
+                    }
+                    catch (InvalidDataException)
+                    {
+                        SendError(request, "camera_batch_too_large");
+                    }
+                }
+                finally
+                {
+                    _operationActive = false;
+                }
+            }
+
+            for (var index = 0; index < cameras.Length; index++)
+            {
+                var resultIndex = index;
+                var camera = cameras[index];
+                StartCoroutine(camera.CaptureJpegAsync(
+                    jpegQuality,
+                    jpeg =>
+                    {
+                        if (jpeg.Length > MaxCameraJpegBytes)
+                        {
+                            captureError ??= "camera_frame_too_large";
+                        }
+                        else
+                        {
+                            frames[resultIndex] = new RlCameraFrameDto
+                            {
+                                name = camera.CameraId,
+                                width = camera.ImageWidth,
+                                height = camera.ImageHeight,
+                                image_base64 = Convert.ToBase64String(jpeg),
+                                sequence = camera.CaptureSequence,
+                                sim_time = sampleSimTime
+                            };
+                        }
+                        CompleteOne();
+                    },
+                    exception =>
+                    {
+                        Debug.LogWarning(
+                            $"Synchronized camera '{camera.CameraId}' capture failed: " +
+                            exception.Message,
+                            this);
+                        captureError ??= "camera_capture_failed";
+                        CompleteOne();
+                    }));
+            }
+        }
+
+        private RlCameraFrameDto CaptureCameraFrame(
+            RobotVirtualCamera camera,
+            int jpegQuality)
+        {
+            var jpeg = camera.CaptureJpeg(jpegQuality);
+            if (jpeg == null || jpeg.Length == 0)
+            {
+                throw new InvalidDataException("camera_capture_failed");
+            }
+            if (jpeg.Length > MaxCameraJpegBytes)
+            {
+                throw new InvalidDataException("camera_frame_too_large");
+            }
+
+            return new RlCameraFrameDto
+            {
+                name = camera.CameraId,
+                width = camera.ImageWidth,
+                height = camera.ImageHeight,
+                image_base64 = Convert.ToBase64String(jpeg),
+                sequence = camera.CaptureSequence,
+                sim_time = (float)_simTime
+            };
+        }
+
+        private static bool TryParseDriveMode(string value, out bool? fieldCentric)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                fieldCentric = null;
+                return true;
+            }
+
+            switch (value.Trim().ToLowerInvariant())
+            {
+                case "field":
+                case "field-oriented":
+                case "field_oriented":
+                    fieldCentric = true;
+                    return true;
+                case "robot":
+                case "robot-oriented":
+                case "robot_oriented":
+                    fieldCentric = false;
+                    return true;
+                default:
+                    fieldCentric = null;
+                    return false;
+            }
         }
 
         private static int SetpointIndex(ReefscapeSetpoints setpoint) => setpoint switch

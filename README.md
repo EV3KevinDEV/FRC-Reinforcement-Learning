@@ -139,12 +139,29 @@ conda activate mosim-rl
 | `mosim-gamepad --controller 1 --deadzone 0.15 --steps 1000 --print-every 1` | Test another controller and print every gamepad/robot command |
 | `mosim-gamepad --scripted-demo --print-every 5` | Visually exercise every active controller mapping without touching a gamepad |
 | `mosim-gamepad --scripted-demo --pickup-test --print-every 5` | Visually prove coral acquisition through Team 118's normal ground intake and then exercise every mapping |
+| `python python/main/data_collection_teleop.py --dataset-root output/mosim-teleop-run1` | Record LeRobot v3 teleop episodes with field camera/drive defaults, three robot cameras, the full 25D gamepad action, and the translated 6D command |
+| `python python/main/data_collection_teleop.py --windowed-fullscreen --dataset-root output/mosim-teleop-run1` | Record teleop with the Unity player filling the desktop in a borderless window |
 | `mosim-train --action-mode gamepad --total-timesteps 100000` | Train vectorized PPO with the recommended 25D controller output and a local TensorBoard server |
 | `mosim-train --action-mode semantic --total-timesteps 100000` | Train with the legacy six-value action contract |
 | `mosim-train --graphical --wandb --action-mode gamepad` | Train while rendering worker 0 and syncing metrics/checkpoints to W&B |
 | `mosim-evaluate runs/<run>/ppo_final.zip --vecnormalize runs/<run>/vecnormalize.pkl --action-mode gamepad --graphical` | Evaluate a gamepad checkpoint visually |
 | `mosim-benchmark --workers 1 2 4 8 12 16 --decisions 100` | Benchmark worker-count throughput and update `runtime.yaml` |
 | `mosim-soak --num-envs 8 --matches 2` | Run the multi-worker deadlock/NaN/full-match soak test |
+
+The teleop collector uses the same Team 118 layout as `controller_driver_control`:
+A/B/X/Y select coral L1-L4; algae B/X select low/high reef pickup, A selects
+stack pickup or processor, and Y selects the barge; LT runs intake, RT scores,
+LB/RB auto-align, and the D-pad controls stow and robot/intake/source modes.
+Start saves the current episode early and resets, while Back saves and exits.
+Each new dataset root must not already exist.
+Both the collector and `python/examples/05_controller_driver_control.py` accept
+`--windowed-fullscreen`; without it, the Unity player remains a 1280x720 window.
+Manual control is sent independently at the normal 50 Hz FRC cadence. The
+collector defaults to 8 FPS for synchronized 640x360 state/action/three-camera
+samples; every row stores the exact action Unity had applied when it captured
+the state and images. Collector episodes allow 156 seconds: the complete
+150-second match clock, MoSim's three-second disabled transition, and its
+three-second final-scoring grace.
 
 Build and verification commands:
 

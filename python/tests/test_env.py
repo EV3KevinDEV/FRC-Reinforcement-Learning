@@ -73,6 +73,45 @@ class CameraFakeClient(FakeClient):
         return super().request(command, payload, **kwargs)
 
 
+class RealtimeSampleFakeClient(FakeClient):
+    def __init__(self, state: dict, *, camera_sim_time: float = 1.25) -> None:
+        super().__init__(state)
+        self.camera_sim_time = camera_sim_time
+
+    def finish_request(self) -> dict:
+        sampled_state = deepcopy(self.state)
+        sampled_state["match"]["sim_time"] = 1.25
+        applied_gamepad = np.zeros(GAMEPAD_ACTION_DIM, dtype=np.float32)
+        applied_gamepad[1] = 0.8
+        applied_semantic = [0.8, 0.0, 0.0, -1.0, 0.0, -1.0]
+        return {
+            "state": sampled_state,
+            "events": {},
+            "info": {
+                "realtime_control_active": True,
+                "realtime_control_sequence": 44,
+            },
+            "control": {
+                "session": "driver-session",
+                "sequence": 44,
+                "action": applied_semantic,
+                "gamepad_action": applied_gamepad.tolist(),
+            },
+            "camera_frames": [
+                {
+                    "name": "front",
+                    "width": 320,
+                    "height": 180,
+                    "encoding": "jpeg",
+                    "media_type": "image/jpeg",
+                    "image_base64": base64.b64encode(b"aligned-jpeg").decode("ascii"),
+                    "sequence": 9,
+                    "sim_time": self.camera_sim_time,
+                }
+            ],
+        }
+
+
 def test_action_clipping_and_five_value_step(raw_state: dict) -> None:
     client = FakeClient(raw_state)
     env = MoSimEnv(client=client)
@@ -135,6 +174,7 @@ def test_gamepad_policy_action_is_adapted_before_transport(raw_state: dict) -> N
         np.testing.assert_allclose(
             client.last_payload["action"], [0.75, 0.0, 0.0, -0.2, 0.0, -1.0]
         )
+        np.testing.assert_array_equal(client.last_payload["gamepad_action"], gamepad)
         assert info["action_mode"] == "gamepad"
         assert info["gamepad_action"].shape == (25,)
         assert info["semantic_action"].shape == (6,)
@@ -168,5 +208,67 @@ def test_virtual_camera_api_rejects_capture_during_pending_step(raw_state: dict)
         with pytest.raises(RuntimeError, match="while a step is pending"):
             env.get_virtual_camera_frame("front")
         env.finish_step()
+    finally:
+        env.close()
+
+
+def test_realtime_sample_uses_unity_applied_action_and_aligned_camera(
+    raw_state: dict,
+) -> None:
+    client = RealtimeSampleFakeClient(raw_state)
+    env = MoSimEnv(
+        client=client,
+        action_mode="gamepad",
+        graphical=True,
+        realtime=True,
+    )
+    try:
+        env.reset()
+        requested_gamepad = np.zeros(GAMEPAD_ACTION_DIM, dtype=np.float32)
+        requested_semantic = np.asarray([0.1, 0, 0, -1, 0, -1], dtype=np.float32)
+
+        _observation, _reward, _terminated, truncated, info = (
+            env.step_realtime_control(
+                requested_gamepad,
+                requested_semantic,
+                camera_names=("front",),
+                jpeg_quality=90,
+            )
+        )
+
+        assert not truncated
+        assert client.last_payload is not None
+        assert client.last_payload["observe_only"] is True
+        assert client.last_payload["camera_names"] == ["front"]
+        assert client.last_payload["jpeg_quality"] == 90
+        # Unity's applied 0.8 command wins over the older requested 0.1 sample.
+        assert info["semantic_action"][0] == np.float32(0.8)
+        assert info["gamepad_action"][1] == np.float32(0.8)
+        assert info["control_sequence"] == 44
+        assert info["sample_synchronized"] is True
+        assert info["camera_frames"]["front"].sim_time == 1.25
+    finally:
+        env.close()
+
+
+def test_realtime_sample_rejects_camera_from_another_simulator_time(
+    raw_state: dict,
+) -> None:
+    client = RealtimeSampleFakeClient(raw_state, camera_sim_time=1.0)
+    env = MoSimEnv(
+        client=client,
+        action_mode="gamepad",
+        graphical=True,
+        realtime=True,
+    )
+    try:
+        env.reset()
+        _, _, _, truncated, info = env.step_realtime_control(
+            np.zeros(GAMEPAD_ACTION_DIM, dtype=np.float32),
+            np.asarray([0, 0, 0, -1, 0, -1], dtype=np.float32),
+            camera_names=("front",),
+        )
+        assert truncated
+        assert "did not match state sim_time" in info["error"]
     finally:
         env.close()

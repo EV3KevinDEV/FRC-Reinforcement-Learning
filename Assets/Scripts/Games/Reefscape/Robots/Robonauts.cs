@@ -435,18 +435,19 @@ namespace Games.Reefscape.Robots
         }
         private void AutoAlignOffsets()
         {
-            if (!AutoAlignLeftAction.IsPressed() && !AutoAlignRightAction.IsPressed())
+            if (!IsAutoAlignLeftPressed() && !IsAutoAlignRightPressed())
             {
                 preAligned = false;
             }
 
             float l4Distance = 5f;
             float lOtherDistance = 5.5f;
-            if (!preAligned && (AutoAlignLeftAction.IsPressed() || AutoAlignRightAction.IsPressed()))
+            if (!preAligned && (IsAutoAlignLeftPressed() || IsAutoAlignRightPressed()))
             {
                 l4Distance = -5;
                 lOtherDistance = -5;
-                if (align.getDistance() < 0.0254f * 6f && !AutoAlignLeftAction.triggered && !AutoAlignRightAction.triggered)
+                if (align.getDistance() < 0.0254f * 6f &&
+                    !WasAutoAlignLeftTriggered() && !WasAutoAlignRightTriggered())
                 {
                     preAligned = true;
                 }

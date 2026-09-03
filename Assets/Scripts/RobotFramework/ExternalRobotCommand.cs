@@ -17,6 +17,16 @@ namespace RobotFramework
         public float ManipulatorIntent;
         public bool StationMode;
         public bool PlacePulse;
+        public bool HasGamepadControls;
+        public bool TargetSelectionPulse;
+        public bool RobotModeTogglePulse;
+        public bool IntakeModeTogglePulse;
+        public bool ClimbPulse;
+        public bool CameraFlipPulse;
+        public bool AutoAlignLeft;
+        public bool AutoAlignRight;
+        public bool AutoAlignLeftPulse;
+        public bool AutoAlignRightPulse;
 
         public bool IntakePressed => ManipulatorIntent > 0.33f;
         public bool PlacePressed => PlacePulse;
@@ -31,7 +41,17 @@ namespace RobotFramework
             TargetSetpoint = 0,
             ManipulatorIntent = 0f,
             StationMode = false,
-            PlacePulse = false
+            PlacePulse = false,
+            HasGamepadControls = false,
+            TargetSelectionPulse = false,
+            RobotModeTogglePulse = false,
+            IntakeModeTogglePulse = false,
+            ClimbPulse = false,
+            CameraFlipPulse = false,
+            AutoAlignLeft = false,
+            AutoAlignRight = false,
+            AutoAlignLeftPulse = false,
+            AutoAlignRightPulse = false
         };
     }
 }

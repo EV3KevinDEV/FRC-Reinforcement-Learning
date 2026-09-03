@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,7 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
         action_mode: str = "semantic",
         graphical: bool = False,
         realtime: bool = False,
+        windowed_fullscreen: bool = False,
         auto_connect: bool = True,
         client: ProtocolClient | Any | None = None,
     ) -> None:
@@ -82,8 +84,11 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
         self.log_dir = Path(log_dir).resolve()
         self.graphical = graphical
         self.realtime = realtime
+        self.windowed_fullscreen = windowed_fullscreen
         if realtime and not graphical:
             raise ValueError("realtime mode requires graphical=True")
+        if windowed_fullscreen and not graphical:
+            raise ValueError("windowed_fullscreen requires graphical=True")
         self.curriculum = CurriculumManager(
             stage=curriculum_stage, automatic=automatic_curriculum
         )
@@ -98,6 +103,8 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
         self._previous_action = np.zeros(6, dtype=np.float32)
         self._pending_action: np.ndarray | None = None
         self._pending_policy_action: np.ndarray | None = None
+        self._pending_realtime_sample = False
+        self._pending_camera_names: tuple[str, ...] = ()
         self._last_raw_state: dict[str, Any] = {}
         self._last_observation = np.zeros(OBSERVATION_DIM, dtype=np.float32)
         self._needs_restart = False
@@ -129,6 +136,7 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
                 seed=self.base_seed + self.worker_id,
                 graphical=self.graphical,
                 realtime=self.realtime,
+                windowed_fullscreen=self.windowed_fullscreen,
             )
         self._worker.start()
 
@@ -236,11 +244,76 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
             else policy_action
         )
         assert self._client is not None
-        self._client.begin_request(
-            "step", {"action": semantic_action.tolist(), "frame_skip": self.frame_skip}
-        )
+        payload = {
+            "action": semantic_action.tolist(),
+            "frame_skip": self.frame_skip,
+        }
+        if self.action_mode == "gamepad":
+            payload["gamepad_action"] = policy_action.tolist()
+        self._client.begin_request("step", payload)
         self._pending_action = semantic_action
         self._pending_policy_action = policy_action.copy()
+        self._pending_realtime_sample = False
+        self._pending_camera_names = ()
+
+    def begin_realtime_control_step(
+        self,
+        gamepad_action: np.ndarray,
+        semantic_action: np.ndarray,
+        *,
+        camera_names: Sequence[str] = (),
+        jpeg_quality: int = 85,
+    ) -> None:
+        """Atomically sample state, sensors, and Unity's applied controller action."""
+
+        if self._pending_action is not None:
+            raise RuntimeError("step already pending")
+        if self.action_mode != "gamepad":
+            raise RuntimeError("realtime control sampling requires action_mode='gamepad'")
+        if not self.realtime:
+            raise RuntimeError("realtime control sampling requires realtime=True")
+
+        policy_action = np.asarray(gamepad_action, dtype=np.float32)
+        if policy_action.shape != self.action_space.shape:
+            raise ValueError(
+                f"expected action shape {self.action_space.shape}, got {policy_action.shape}"
+            )
+        policy_action = np.clip(
+            policy_action, self.action_space.low, self.action_space.high
+        )
+        semantic = np.asarray(semantic_action, dtype=np.float32)
+        if semantic.shape != (6,):
+            raise ValueError(f"expected semantic action shape {(6,)}, got {semantic.shape}")
+        semantic = np.clip(semantic, ACTION_LOW, ACTION_HIGH)
+
+        names = tuple(camera_names)
+        if any(not isinstance(name, str) or not name.strip() for name in names):
+            raise ValueError("camera_names must contain non-empty strings")
+        if len(set(names)) != len(names):
+            raise ValueError("camera_names must be unique")
+        if (
+            isinstance(jpeg_quality, bool)
+            or not isinstance(jpeg_quality, int)
+            or not 1 <= jpeg_quality <= 95
+        ):
+            raise ValueError("jpeg_quality must be an integer from 1 through 95")
+
+        assert self._client is not None
+        self._client.begin_request(
+            "step",
+            {
+                "action": semantic.tolist(),
+                "gamepad_action": policy_action.tolist(),
+                "frame_skip": self.frame_skip,
+                "observe_only": True,
+                "camera_names": list(names),
+                "jpeg_quality": jpeg_quality,
+            },
+        )
+        self._pending_action = semantic
+        self._pending_policy_action = policy_action.copy()
+        self._pending_realtime_sample = True
+        self._pending_camera_names = names
 
     def finish_step(
         self,
@@ -249,6 +322,11 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
             raise RuntimeError("no step pending")
         action, self._pending_action = self._pending_action, None
         policy_action, self._pending_policy_action = self._pending_policy_action, None
+        realtime_sample, self._pending_realtime_sample = (
+            self._pending_realtime_sample,
+            False,
+        )
+        camera_names, self._pending_camera_names = self._pending_camera_names, ()
         try:
             assert self._client is not None
             payload = self._client.finish_request()
@@ -258,6 +336,10 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
             events = payload.get("events", {})
             if not isinstance(events, dict):
                 events = {}
+            if realtime_sample:
+                control = self._parse_control_snapshot(payload)
+                action = control["semantic_action"]
+                policy_action = control["gamepad_action"]
             reward_result = self.reward_calculator.calculate(raw_state, action, events)
             observation = self.encoder.encode(raw_state, action)
             self._last_raw_state = raw_state
@@ -273,6 +355,14 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
             if policy_action is not None and self.action_mode == "gamepad":
                 info["gamepad_action"] = policy_action.copy()
                 info["gamepad_active_mask"] = GAMEPAD_ACTIVE_MASK.copy()
+            if realtime_sample:
+                info.update(control)
+                info["camera_frames"] = self._parse_synchronized_camera_frames(
+                    payload,
+                    camera_names,
+                    float(info.get("sim_time", 0.0)),
+                )
+                info["sample_synchronized"] = True
             info["reward_terms"] = reward_result.terms
             info["termination_reason"] = reward_result.reason
             return (
@@ -299,6 +389,87 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
     ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         self.begin_step(action)
         return self.finish_step()
+
+    def step_realtime_control(
+        self,
+        gamepad_action: np.ndarray,
+        semantic_action: np.ndarray,
+        *,
+        camera_names: Sequence[str] = (),
+        jpeg_quality: int = 85,
+    ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+        """Return one aligned state/action/camera sample during realtime driving."""
+
+        self.begin_realtime_control_step(
+            gamepad_action,
+            semantic_action,
+            camera_names=camera_names,
+            jpeg_quality=jpeg_quality,
+        )
+        return self.finish_step()
+
+    @staticmethod
+    def _parse_control_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
+        control = payload.get("control")
+        if not isinstance(control, dict):
+            raise ProtocolError("realtime sample did not contain an applied control")
+        session = control.get("session")
+        sequence = control.get("sequence")
+        if not isinstance(session, str) or not session:
+            raise ProtocolError("applied control session is invalid")
+        if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= 0:
+            raise ProtocolError("applied control sequence is invalid")
+        semantic = np.asarray(control.get("action"), dtype=np.float32)
+        gamepad = np.asarray(control.get("gamepad_action"), dtype=np.float32)
+        if semantic.shape != (6,):
+            raise ProtocolError(
+                f"applied semantic action has shape {semantic.shape}; expected {(6,)}"
+            )
+        if gamepad.shape != (GAMEPAD_ACTION_HIGH.shape[0],):
+            raise ProtocolError(
+                "applied gamepad action has shape "
+                f"{gamepad.shape}; expected {(GAMEPAD_ACTION_HIGH.shape[0],)}"
+            )
+        return {
+            "control_session": session,
+            "control_sequence": sequence,
+            "semantic_action": semantic,
+            "gamepad_action": gamepad,
+        }
+
+    @staticmethod
+    def _parse_synchronized_camera_frames(
+        payload: dict[str, Any],
+        expected_names: Sequence[str],
+        state_sim_time: float,
+    ) -> dict[str, VirtualCameraFrame]:
+        raw_frames = payload.get("camera_frames")
+        if not isinstance(raw_frames, list):
+            raise ProtocolError("realtime sample did not contain camera_frames")
+        if len(raw_frames) != len(expected_names):
+            raise ProtocolError(
+                f"received {len(raw_frames)} camera frames; expected {len(expected_names)}"
+            )
+
+        frames: dict[str, VirtualCameraFrame] = {}
+        for expected_name, raw_frame in zip(expected_names, raw_frames, strict=True):
+            if not isinstance(raw_frame, dict):
+                raise ProtocolError("camera_frames contained a non-object entry")
+            try:
+                frame = VirtualCameraFrame.from_payload(raw_frame)
+            except ValueError as exc:
+                raise ProtocolError(f"invalid synchronized camera frame: {exc}") from exc
+            if frame.name != expected_name:
+                raise ProtocolError(
+                    f"camera frame {frame.name!r} did not match {expected_name!r}"
+                )
+            if abs(frame.sim_time - state_sim_time) > 1e-4:
+                raise ProtocolError(
+                    f"camera {frame.name!r} sim_time {frame.sim_time} did not match "
+                    f"state sim_time {state_sim_time}"
+                )
+            frames[frame.name] = frame
+        return frames
 
     def list_virtual_cameras(self) -> list[VirtualCameraInfo]:
         """Return sensor cameras configured on the active robot prefab."""

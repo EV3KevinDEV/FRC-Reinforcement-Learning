@@ -12,9 +12,54 @@
 | `2:4` | Right-stick X/Y; X controls yaw and Y is retained for NitroGen compatibility |
 | `4:25` | NitroGen button order: BACK, D-pad down/left/right/up, B, guide, LB, L3, LT, Y, right-stick down/left/right, RB, R3, RT, right-stick up, A, start, X |
 
-Axes are in `[-1, 1]`; buttons and triggers are in `[0, 1]` and buttons activate above `0.5`. The active Team 118 mappings are A/B/X/Y = L1/L2/L3/L4, LT = intake, RT = place, D-pad down = stow, and D-pad right = toggle ground/station source. Other buttons remain in the fixed layout but are masked inactive in `info["gamepad_active_mask"]`.
+Axes are in `[-1, 1]`; buttons and triggers are in `[0, 1]` and buttons activate above `0.5`. The complete physical-controller mapping is:
 
-The adapter preserves selected levels between button presses and converts physical or policy gamepad output into the internal six-value robot command. `info` reports both `gamepad_action` and `semantic_action`. Observation indices `56:62` contain the executed six-value semantic command, not all 25 policy outputs.
+| Control | Command |
+|---|---|
+| Left stick | Translate using the selected robot- or field-oriented drive mode |
+| Right-stick X | Rotate |
+| A / B / X / Y (coral) | L1 / L2 / L3 / L4 |
+| A (algae) | Stack pickup when empty; processor scoring when holding algae |
+| B / X (algae) | Low / high reef pickup |
+| Y (algae) | Barge (net) scoring when holding algae |
+| LT | Hold intake/roller; B or X remains selected while collecting reef algae |
+| RT | Score/place at the selected position |
+| D-pad down | Stow |
+| D-pad up | Toggle coral/algae mode |
+| D-pad left | Toggle normal/L1 intake mode |
+| D-pad right | Toggle ground/station source |
+| LB / RB | Hold auto-align left/right |
+| Left-stick click | Cycle climb preparation/climbed/stow |
+| Right-stick click | Flip the robot camera |
+| Start | Reset the controller-driving episode |
+| Back/Share | Exit the controller-driving example |
+
+The left-stick click is used for climb because the native input asset assigns
+D-pad down to both stow and climb; separating them makes both commands usable.
+Unused synthetic NitroGen outputs remain masked inactive in
+`info["gamepad_active_mask"]`.
+
+The adapter preserves selected levels between button presses and converts physical or policy gamepad output into the internal six-value robot command. It also sends the raw gamepad action to Unity for edge-triggered controls. `info` reports both `gamepad_action` and `semantic_action`. Observation indices `56:62` contain the executed six-value semantic command, not all 25 policy outputs.
+
+### Teleop demonstration dataset
+
+`python/main/data_collection_teleop.py` writes the operator's complete 25-value
+controller vector to the LeRobot `action` feature. This preserves every stick,
+trigger, face button, D-pad mode, auto-align bumper, stick click, Start, and
+Back channel. The translated six-value command is stored separately as
+`action.semantic`; its fourth name is `target_setpoint`, because the value can
+represent coral levels or algae pickup/scoring positions. The collector
+defaults to `camera_mode=field` and `drive_mode=field` on every reset. Start and
+Back are recording controls, so their pressed frames end/reset recording before
+an environment transition is added; the fixed action channels remain present.
+Manual control uses an independent 20 ms stream (50 Hz), while synchronized
+dataset samples default to 8 FPS for the three 640x360 cameras. Unity returns
+the exact raw and semantic actions active when it snapshots state and submits
+all camera renders. `metadata.sample` stores `[sim_time, control_sequence]`, and
+the client rejects any camera whose simulation timestamp differs from the state
+timestamp. The default 156-second safety limit matches MoSim's verified full
+episode: the 150-second FRC clock, three-second auto-to-teleop pause, and
+three-second final-scoring grace.
 
 ## Legacy semantic action
 

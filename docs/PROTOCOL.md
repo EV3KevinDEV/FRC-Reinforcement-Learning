@@ -1,6 +1,9 @@
 # MoSimulator RL protocol v1
 
-The TCP wire command remains a six-value semantic robot command. Python's optional 25-value NitroGen gamepad adapter runs before framing, allowing physical controllers and gamepad-output policies to share the same verified Unity bridge without changing protocol version 1.
+The TCP wire command retains the six-value semantic robot command. Gamepad-mode
+steps additionally carry the optional 25-value NitroGen action so Unity can
+handle button-only controls such as mode toggles, auto-align, climb, and camera
+flip without changing protocol version 1.
 
 The bridge listens only on the configured loopback address. Each TCP frame is a four-byte unsigned big-endian length followed by that many bytes of UTF-8 JSON. The maximum JSON payload is 1 MiB.
 
@@ -21,14 +24,32 @@ The server rejects malformed frames, non-positive or stale request IDs, unknown 
 Commands:
 
 - `hello`: negotiate protocol, action/observation dimensions, Team 118, native physics timestep, control timestep, decision timestep, frame skip, and virtual-camera capabilities.
-- `reset`: reset the scene using `seed`, `curriculum_stage`, `scenario`, and `frame_skip`.
-- `step`: apply one six-value normalized action for `frame_skip` 20 ms control quanta. The bridge runs however many native physics steps are needed and carries fractional-step error forward.
+- `reset`: reset the scene using `seed`, `curriculum_stage`, `scenario`, `frame_skip`, and optional graphical `camera_mode` / `drive_mode` settings.
+- `step`: apply one six-value normalized `action` and, for gamepad control, an optional 25-value `gamepad_action`, for `frame_skip` 20 ms control quanta. The bridge runs however many native physics steps are needed and carries fractional-step error forward.
 - `list_cameras`: list virtual-camera calibration on the active robot.
 - `get_camera_frame`: render one named virtual camera as a base64-encoded JPEG without advancing physics.
 - `ping`: liveness and timing metadata.
 - `close`: acknowledge and terminate the Unity player.
 
+For graphical controller driving, `camera_mode` accepts `field` / `third-person`
+(fixed-style field view), `robot` (robot-heading perspective), or `driver-station`.
+`drive_mode` accepts `robot` or `field`; `field` rotates the fixed field-frame
+translation command into the robot's current heading frame.
+
 The socket reader runs on a background thread. It queues raw payloads only; parsing and all Unity object access happen on Unity's main thread.
+
+When realtime mode is enabled, `hello` also advertises
+`realtime_control_api: true` and `realtime_control_port`. The client sends
+versioned, session-scoped, monotonically sequenced control datagrams over UDP at
+50 Hz. Unity drains those datagrams every `Update`, ignores stale sequences, and
+stops external control if the stream is absent for 250 ms.
+
+A realtime `step` may set `observe_only: true` and provide `camera_names`.
+Unity then returns one atomic sample containing state, the exact applied raw and
+semantic control plus its sequence, and all requested `camera_frames`. Every
+camera frame carries the same simulation timestamp as the state. This mode does
+not advance an artificial 20 ms step; normal realtime physics continues while
+the independent control stream remains responsive.
 
 MoSimulator `v26.2.0` is authored around a roughly 4.5 ms (222.2 Hz) PhysX timestep. Protocol `fixed_dt` reports that native value, `control_dt` is 0.02 seconds, and the default `decision_dt` is `5 * 0.02 = 0.1` seconds. A policy action therefore spans alternating native-step counts while remaining 10 Hz over time. The bridge never enlarges the native physics timestep.
 

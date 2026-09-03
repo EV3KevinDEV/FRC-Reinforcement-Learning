@@ -85,6 +85,7 @@ Mods/Robonauts/Build/robonautsmod_assets_all_5774bae440d1954dc02e1305d3e24445.bu
 
 # MoSimulator RL generated artifacts
 /runs/
+/output/
 /.pytest_cache/
 /python/.pytest_cache/
 /python/src/*.egg-info/

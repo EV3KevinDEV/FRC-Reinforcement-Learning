@@ -49,6 +49,7 @@ class UnityWorkerProcess:
     job_worker_count: int = 2
     graphical: bool = False
     realtime: bool = False
+    windowed_fullscreen: bool = False
     process: subprocess.Popen[bytes] | None = None
 
     @property
@@ -68,14 +69,25 @@ class UnityWorkerProcess:
             command.extend(
                 [
                     "-screen-fullscreen",
-                    "0",
-                    "-screen-width",
-                    "1280",
-                    "-screen-height",
-                    "720",
-                    "--rl-graphical",
+                    "1" if self.windowed_fullscreen else "0",
                 ]
             )
+            if self.windowed_fullscreen:
+                # Unity's borderless window mode is Windows-only. On other
+                # platforms, the fullscreen flag still selects the player's
+                # configured Fullscreen Window mode.
+                if _is_windows():
+                    command.extend(["-window-mode", "borderless"])
+            else:
+                command.extend(
+                    [
+                        "-screen-width",
+                        "1280",
+                        "-screen-height",
+                        "720",
+                    ]
+                )
+            command.append("--rl-graphical")
         else:
             command.extend(["-batchmode", "-nographics"])
         command.extend(

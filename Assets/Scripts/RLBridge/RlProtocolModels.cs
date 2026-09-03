@@ -19,12 +19,28 @@ namespace MoSimRL
         public int action_dim;
         public int observation_dim;
         public float[] action;
+        public float[] gamepad_action;
+        public bool observe_only;
         public int seed;
         public int frame_skip = 5;
         public int curriculum_stage;
         public string scenario;
+        public string camera_mode;
+        public string drive_mode;
         public string camera_name;
+        public string[] camera_names;
         public int jpeg_quality = 85;
+    }
+
+    [Serializable]
+    public class RlRealtimeControl
+    {
+        public int v;
+        public string session;
+        public long sequence;
+        public bool active;
+        public float[] action;
+        public float[] gamepad_action;
     }
 
     [Serializable]
@@ -52,8 +68,12 @@ namespace MoSimRL
         public int frame_skip;
         public bool virtual_camera_api;
         public bool camera_rendering_available;
+        public bool realtime_control_api;
+        public int realtime_control_port;
         public RlCameraInfoDto[] cameras;
         public RlCameraFrameDto camera_frame;
+        public RlCameraFrameDto[] camera_frames;
+        public RlControlSnapshotDto control;
         public RlStateDto state;
         public RlEventsDto events;
         public RlInfoDto info;
@@ -157,6 +177,18 @@ namespace MoSimRL
         public int step_id;
         public int curriculum_stage;
         public string scenario;
+        public bool realtime_control_active;
+        public long realtime_control_sequence;
+        public float realtime_control_age_ms;
+    }
+
+    [Serializable]
+    public class RlControlSnapshotDto
+    {
+        public string session;
+        public long sequence;
+        public float[] action;
+        public float[] gamepad_action;
     }
 
     [Serializable]

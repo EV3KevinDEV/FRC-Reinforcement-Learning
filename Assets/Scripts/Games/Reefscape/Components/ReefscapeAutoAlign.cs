@@ -45,13 +45,12 @@ public class ReefscapeAutoAlign : AutoAlign
     private void Update()
     {
         if (_base == null) return;
+
+        InitializeTargets();
         
-        if (_base.AutoAlignLeftAction.triggered || _base.AutoAlignRightAction.triggered)
+        if (_base.WasAutoAlignLeftTriggered() || _base.WasAutoAlignRightTriggered())
         {
-            ClosestFaces();
-            (Transform closest, Transform secondClosest) = ClosestPoints();
-            closests = closest;
-            secondCloses = secondClosest;
+            RefreshClosestTargets();
         }
 
         realOffset = offset * 0.0254f;
@@ -59,28 +58,16 @@ public class ReefscapeAutoAlign : AutoAlign
 
     private void FixedUpdate()
     {
-        if (startup)
-        {
-            var nodes = GameObject.FindGameObjectsWithTag("ReefFace");
-        
-            foreach (var node in nodes)
-            {
-                node.TryGetComponent<AlignNode>(out var tar);
-                if (tar != null)
-                {
-                    targetNodes.Add(tar);
-                }
-            }
+        if (_base == null) return;
 
-            foreach (var node in targetNodes)
-            {
-                parentLookup.TryAdd(node.LeftNode.transform, node);
-                parentLookup.TryAdd(node.RightNode.transform, node);
-            }
-        
-            candidates = new (Transform, float)[4];
-            
-            startup = false;
+        InitializeTargets();
+
+        // A held external bumper can arrive without its one-frame pulse being
+        // observed by Update. Resolve a target here as a safe fallback.
+        if ((_base.IsAutoAlignLeftPressed() || _base.IsAutoAlignRightPressed()) &&
+            closests == null)
+        {
+            RefreshClosestTargets();
         }
 
         if (PlayerPrefs.GetInt("PerspectiveAutoAlign", 1) == 1)
@@ -94,9 +81,47 @@ public class ReefscapeAutoAlign : AutoAlign
         
     }
 
-    private bool cameraFacesNode(AlignNode node)
+    private void InitializeTargets()
     {
+        if (!startup) return;
+
+        targetNodes.Clear();
+        parentLookup.Clear();
+
+        var nodes = GameObject.FindGameObjectsWithTag("ReefFace");
+        foreach (var node in nodes)
+        {
+            if (node.TryGetComponent<AlignNode>(out var target) && target != null &&
+                target.LeftNode != null && target.RightNode != null)
+            {
+                targetNodes.Add(target);
+            }
+        }
+
+        foreach (var node in targetNodes)
+        {
+            parentLookup.TryAdd(node.LeftNode.transform, node);
+            parentLookup.TryAdd(node.RightNode.transform, node);
+        }
+
+        candidates = new (Transform, float)[4];
+        startup = false;
+    }
+
+    private bool RefreshClosestTargets()
+    {
+        InitializeTargets();
+        ClosestFaces();
+        (closests, secondCloses) = ClosestPoints();
+        return closests != null;
+    }
+
+    private bool CameraFacesNode(AlignNode node)
+    {
+        if (node == null || _base == null) return false;
+
         GameObject activeCamera = _base.GetActiveCamera();
+        if (activeCamera == null) return false;
 
         var nodeTransform = node.transform;
         
@@ -112,39 +137,67 @@ public class ReefscapeAutoAlign : AutoAlign
     private void perspectiveRelativeAlign()
     {
         if (_base == null) return;
+
+        bool alignLeft = _base.IsAutoAlignLeftPressed();
+        bool alignRight = _base.IsAutoAlignRightPressed();
+        if (!alignLeft && !alignRight) return;
+
+        if (closests == null && !RefreshClosestTargets()) return;
         
-        if (_base.AutoAlignLeftAction.IsPressed())
+        if (alignLeft)
         {
-            parentLookup.TryGetValue(closests, out var cl);
-            if (TryAlignToNode(closests, !cameraFacesNode(cl))) return;
-            parentLookup.TryGetValue(secondCloses, out var sc);
-            if (TryAlignToNode(secondCloses, !cameraFacesNode(sc))) return;
-            if (TryAlignToNode(cl.LeftNode.transform, !cameraFacesNode(cl))) return;
-            if (TryAlignToNode(cl.RightNode.transform, !cameraFacesNode(cl))) return;
+            if (TryPerspectiveAlignToNode(closests, false)) return;
+            if (TryPerspectiveAlignToNode(secondCloses, false)) return;
+            if (TryPerspectiveFaceFallback(closests, false)) return;
         }
         
-        if (_base.AutoAlignRightAction.IsPressed())
+        if (alignRight)
         {
-            parentLookup.TryGetValue(closests, out var cl);
-            if (TryAlignToNode(closests, cameraFacesNode(cl))) return;
-            parentLookup.TryGetValue(secondCloses, out var sc);
-            if (TryAlignToNode(secondCloses, cameraFacesNode(sc))) return;
-            if (TryAlignToNode(cl.LeftNode.transform, cameraFacesNode(cl))) return;
-            if (TryAlignToNode(cl.RightNode.transform, cameraFacesNode(cl))) return;
+            if (TryPerspectiveAlignToNode(closests, true)) return;
+            if (TryPerspectiveAlignToNode(secondCloses, true)) return;
+            TryPerspectiveFaceFallback(closests, true);
         }
+    }
+
+    private bool TryPerspectiveAlignToNode(Transform targetNode, bool rightButton)
+    {
+        if (targetNode == null ||
+            !parentLookup.TryGetValue(targetNode, out var parentNode) ||
+            parentNode == null)
+        {
+            return false;
+        }
+
+        bool cameraFacesNode = CameraFacesNode(parentNode);
+        return TryAlignToNode(targetNode, rightButton ? cameraFacesNode : !cameraFacesNode);
+    }
+
+    private bool TryPerspectiveFaceFallback(Transform targetNode, bool rightButton)
+    {
+        if (targetNode == null ||
+            !parentLookup.TryGetValue(targetNode, out var parentNode) ||
+            parentNode == null)
+        {
+            return false;
+        }
+
+        bool cameraFacesNode = CameraFacesNode(parentNode);
+        bool isLeftSide = rightButton ? cameraFacesNode : !cameraFacesNode;
+        return TryAlignToNode(parentNode.LeftNode.transform, isLeftSide) ||
+               TryAlignToNode(parentNode.RightNode.transform, isLeftSide);
     }
 
     private void ReefRelativeAlign()
     {
         if (_base == null) return;
         
-        if (_base.AutoAlignLeftAction.IsPressed())
+        if (_base.IsAutoAlignLeftPressed())
         {
             TryAlignToNode(closests, true);
             TryAlignToNode(secondCloses, true);
         }
         
-        if (_base.AutoAlignRightAction.IsPressed())
+        if (_base.IsAutoAlignRightPressed())
         {
             TryAlignToNode(closests, false);
             TryAlignToNode(secondCloses, false);

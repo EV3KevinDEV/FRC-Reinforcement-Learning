@@ -28,6 +28,22 @@ def test_nitrogen_layout_and_drive_axis_mapping() -> None:
     np.testing.assert_allclose(semantic, [0.75, -0.25, 0.5, -1.0, 0.0, -1.0])
 
 
+def test_complete_physical_controller_buttons_are_active() -> None:
+    for name in (
+        "BACK",
+        "DPAD_DOWN",
+        "DPAD_LEFT",
+        "DPAD_RIGHT",
+        "DPAD_UP",
+        "LEFT_SHOULDER",
+        "LEFT_THUMB",
+        "RIGHT_SHOULDER",
+        "RIGHT_THUMB",
+        "START",
+    ):
+        assert GAMEPAD_ACTIVE_MASK[BUTTON_INDEX[name]]
+
+
 def test_face_buttons_select_persistent_scoring_levels() -> None:
     adapter = GamepadActionAdapter()
     expected = {"SOUTH": -0.2, "EAST": 0.2, "WEST": 0.6, "NORTH": 1.0}
@@ -36,6 +52,32 @@ def test_face_buttons_select_persistent_scoring_levels() -> None:
         released = adapter.to_semantic(action())
         assert selected[3] == np.float32(target)
         assert released[3] == np.float32(target)
+
+
+def test_overlapping_target_buttons_use_last_press_and_held_fallback() -> None:
+    adapter = GamepadActionAdapter()
+
+    # Simultaneous A+B retains the historical A priority.
+    simultaneous = adapter.to_semantic(action(SOUTH=1.0, EAST=1.0))
+    assert simultaneous[3] == np.float32(-0.2)
+
+    # Releasing A promotes the still-held B instead of losing B's command.
+    fallback = adapter.to_semantic(action(EAST=1.0))
+    assert fallback[3] == np.float32(0.2)
+
+    # A newly pressed X takes priority over the older held B.
+    newest = adapter.to_semantic(action(EAST=1.0, WEST=1.0))
+    assert newest[3] == np.float32(0.6)
+
+
+def test_right_trigger_takes_over_immediately_when_left_trigger_releases() -> None:
+    adapter = GamepadActionAdapter()
+
+    both = adapter.to_semantic(action(LEFT_TRIGGER=0.8, RIGHT_TRIGGER=0.9))
+    assert both[4] == np.float32(0.8)
+
+    score = adapter.to_semantic(action(RIGHT_TRIGGER=0.9))
+    assert score[4] == np.float32(-0.9)
 
 
 def test_triggers_and_station_toggle_match_mosim_gamepad_behavior() -> None:
@@ -56,6 +98,33 @@ def test_triggers_and_station_toggle_match_mosim_gamepad_behavior() -> None:
     ground = adapter.to_semantic(action(DPAD_RIGHT=1.0))
     assert station[5] == held[5] == 1.0
     assert ground[5] == -1.0
+
+
+def test_left_trigger_preserves_selected_algae_pickup_position() -> None:
+    adapter = GamepadActionAdapter()
+
+    adapter.to_semantic(action(DPAD_UP=1.0))
+    adapter.to_semantic(action())
+    stack_algae = adapter.to_semantic(action(SOUTH=1.0))
+    adapter.to_semantic(action())
+    stack_intake = adapter.to_semantic(action(LEFT_TRIGGER=0.9))
+    assert stack_algae[3] == stack_intake[3] == np.float32(-0.2)
+    assert stack_intake[4] == np.float32(0.9)
+
+    adapter.reset()
+    low_algae = adapter.to_semantic(action(EAST=1.0))
+    adapter.to_semantic(action())
+    low_intake = adapter.to_semantic(action(LEFT_TRIGGER=0.8))
+    low_released = adapter.to_semantic(action())
+    assert low_algae[3] == low_intake[3] == low_released[3] == np.float32(0.2)
+    assert low_intake[4] == np.float32(0.8)
+
+    adapter.reset()
+    high_algae = adapter.to_semantic(action(WEST=1.0))
+    adapter.to_semantic(action())
+    high_intake = adapter.to_semantic(action(LEFT_TRIGGER=0.7))
+    assert high_algae[3] == high_intake[3] == np.float32(0.6)
+    assert high_intake[4] == np.float32(0.7)
 
 
 def test_random_gamepad_actor_is_sparse_coherent_and_seeded() -> None:
