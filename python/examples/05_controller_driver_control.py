@@ -100,7 +100,7 @@ def main() -> None:
             print("  D-pad up       toggle coral/algae mode")
             print("  D-pad left     toggle normal/L1 intake mode")
             print("  LB/RB           hold auto-align left/right")
-            print("  Left stick     click to cycle climb state")
+            print("  Left stick     click unbound (climber disabled)")
             print("  Right stick    click to flip robot camera")
             print("  Start           reset the episode")
             print("  Back            exit this example")

@@ -65,7 +65,7 @@ GAMEPAD_ACTIVE_MASK = np.asarray(
         True,  # EAST: L2
         False,  # GUIDE
         True,  # LEFT_SHOULDER: auto-align left
-        True,  # LEFT_THUMB: cycle climb state
+        False,  # LEFT_THUMB: reserved, climber intentionally unbound
         True,  # LEFT_TRIGGER: intake
         True,  # NORTH: L4
         False,  # RIGHT_BOTTOM

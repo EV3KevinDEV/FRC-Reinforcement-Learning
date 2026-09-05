@@ -120,6 +120,11 @@ def test_recording_preserves_ordered_taps_and_first_place_under_camera_load(brie
         assert stream.sample()["mechanism"]["setpoint"] == 0
         stream.set()
 
+        stream.set(LEFT_THUMB=1)
+        time.sleep(0.1)
+        assert stream.sample()["mechanism"]["setpoint"] == 0
+        stream.set()
+
         stream.set(EAST=1)
         time.sleep(0.1)
         stream.set()

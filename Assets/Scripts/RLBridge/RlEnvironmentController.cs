@@ -30,7 +30,6 @@ namespace MoSimRL
         private const int GamepadDpadUp = 8;
         private const int GamepadEast = 9;
         private const int GamepadLeftShoulder = 11;
-        private const int GamepadLeftThumb = 12;
         private const int GamepadNorth = 14;
         private const int GamepadRightShoulder = 18;
         private const int GamepadRightThumb = 19;
@@ -414,7 +413,7 @@ namespace MoSimRL
                 TargetSelectionPulse = targetSelectionPulse,
                 RobotModeTogglePulse = GamepadRising(gamepad, GamepadDpadUp),
                 IntakeModeTogglePulse = GamepadRising(gamepad, GamepadDpadLeft),
-                ClimbPulse = GamepadRising(gamepad, GamepadLeftThumb),
+                ClimbPulse = false, // Climber is intentionally unbound.
                 CameraFlipPulse = GamepadRising(gamepad, GamepadRightThumb),
                 AutoAlignLeft = GamepadPressed(gamepad, GamepadLeftShoulder),
                 AutoAlignRight = GamepadPressed(gamepad, GamepadRightShoulder),

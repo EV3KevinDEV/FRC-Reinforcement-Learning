@@ -575,7 +575,7 @@
                 {
                     "name": "",
                     "id": "51f249b1-e346-4331-ae9f-7ec64e1e614d",
-                    "path": "<Gamepad>/dpad/down",
+                    "path": "",
                     "interactions": "",
                     "processors": "",
                     "groups": "Robot 1",
@@ -586,7 +586,7 @@
                 {
                     "name": "",
                     "id": "0440a612-4fb0-4aec-a529-8330509f6319",
-                    "path": "<Keyboard>/c",
+                    "path": "",
                     "interactions": "",
                     "processors": "",
                     "groups": "Robot 1",
@@ -597,7 +597,7 @@
                 {
                     "name": "",
                     "id": "46002701-516e-452a-8a7a-130d478ab37a",
-                    "path": "<Gamepad>/dpad/down",
+                    "path": "",
                     "interactions": "",
                     "processors": "",
                     "groups": "Robot 2",

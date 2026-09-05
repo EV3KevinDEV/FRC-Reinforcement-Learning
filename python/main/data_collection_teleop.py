@@ -136,7 +136,7 @@ LOCAL_STATE_NAMES = (
 
 # ``action`` is the operator command used for behavioral cloning. It retains
 # every NitroGen-compatible gamepad channel, including mode toggles, auto-align,
-# climb, camera flip, and recording controls. Four synthetic right-stick
+# camera flip, and recording controls. Four synthetic right-stick
 # direction channels remain in the fixed layout for NitroGen compatibility.
 GAMEPAD_ACTION_NAMES = (
     "left_stick_x",
@@ -273,7 +273,7 @@ def print_control_layout(args: argparse.Namespace) -> None:
     print("  D-pad up       toggle coral/algae mode")
     print("  D-pad left     toggle normal/L1 intake mode")
     print("  LB/RB          hold auto-align left/right")
-    print("  Left stick     click to cycle climb state")
+    print("  Left stick     click unbound (climber disabled)")
     print("  Right stick    click to flip robot camera")
     print("  Start          save this episode early and reset")
     print("  Back           save this episode and stop recording")

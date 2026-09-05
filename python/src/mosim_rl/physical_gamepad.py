@@ -76,7 +76,6 @@ class PhysicalGamepad:
             "EAST": pygame.CONTROLLER_BUTTON_B,
             "GUIDE": pygame.CONTROLLER_BUTTON_GUIDE,
             "LEFT_SHOULDER": pygame.CONTROLLER_BUTTON_LEFTSHOULDER,
-            "LEFT_THUMB": pygame.CONTROLLER_BUTTON_LEFTSTICK,
             "NORTH": pygame.CONTROLLER_BUTTON_Y,
             "RIGHT_SHOULDER": pygame.CONTROLLER_BUTTON_RIGHTSHOULDER,
             "RIGHT_THUMB": pygame.CONTROLLER_BUTTON_RIGHTSTICK,

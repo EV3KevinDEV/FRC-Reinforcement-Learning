@@ -29,16 +29,16 @@ Axes are in `[-1, 1]`; buttons and triggers are in `[0, 1]` and buttons activate
 | D-pad left | Toggle normal/L1 intake mode |
 | D-pad right | Unbound; reserved for fixed 25D schema compatibility |
 | LB / RB | Hold auto-align left/right |
-| Left-stick click | Cycle climb preparation/climbed/stow |
+| Left-stick click | Unbound; climber disabled, channel reserved for 25D compatibility |
 | Right-stick click | Flip the robot camera |
 | Start | Reset the controller-driving episode |
 | Back/Share | Exit the controller-driving example |
 
-The left-stick click is used for climb because the native input asset assigns
-D-pad down to both stow and climb; separating them makes both commands usable.
+Climb bindings are removed from both Unity players and the keyboard. D-pad down
+only stows; left-stick click does nothing, including for direct RL commands.
 Unbound and unused NitroGen outputs remain masked inactive in
 `info["gamepad_active_mask"]`. The physical-controller reader leaves the
-D-pad-Right channel at zero.
+D-pad-Right and left-stick-click channels at zero.
 The native Unity input asset also leaves D-pad Right unbound for both players.
 
 The adapter preserves selected levels between button presses and converts physical or policy gamepad output into the internal six-value robot command. It also sends the raw gamepad action to Unity for edge-triggered controls. `info` reports both `gamepad_action` and `semantic_action`. Observation indices `56:62` contain the executed six-value semantic command, not all 25 policy outputs.

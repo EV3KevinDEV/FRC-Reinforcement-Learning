@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from mosim_rl.constants import (
     GAMEPAD_ACTION_DIM,
@@ -37,9 +38,16 @@ def test_native_unity_players_have_no_right_dpad_binding():
     for action_map in maps:
         for binding in action_map["bindings"]:
             assert "dpad/right" not in binding["path"].lower()
+            if binding["action"] == "Climb":
+                assert binding["path"] == ""
+    assert any(
+        binding["action"] == "Stow" and binding["path"] == "<Gamepad>/dpad/down"
+        for action_map in maps for binding in action_map["bindings"]
+    )
 
 
-def test_physical_right_dpad_press_is_not_recorded(monkeypatch):
+@pytest.mark.parametrize("button_name", ["CONTROLLER_BUTTON_DPAD_RIGHT", "CONTROLLER_BUTTON_LEFTSTICK"])
+def test_physical_unbound_press_is_not_recorded(monkeypatch, button_name):
     import pygame
     from mosim_rl.physical_gamepad import PhysicalGamepad
 
@@ -48,7 +56,7 @@ def test_physical_right_dpad_press_is_not_recorded(monkeypatch):
     monkeypatch.setattr(PhysicalGamepad, "_trigger_axis", lambda *a: 0.0)
     monkeypatch.setattr(
         PhysicalGamepad, "_button",
-        lambda self, button: float(button == pygame.CONTROLLER_BUTTON_DPAD_RIGHT),
+        lambda self, button: float(button == getattr(pygame, button_name)),
     )
     raw = PhysicalGamepad().read()
     assert raw.shape == (25,)
@@ -62,13 +70,13 @@ def test_bound_physical_controller_buttons_are_active() -> None:
         "DPAD_LEFT",
         "DPAD_UP",
         "LEFT_SHOULDER",
-        "LEFT_THUMB",
         "RIGHT_SHOULDER",
         "RIGHT_THUMB",
         "START",
     ):
         assert GAMEPAD_ACTIVE_MASK[BUTTON_INDEX[name]]
     assert not GAMEPAD_ACTIVE_MASK[BUTTON_INDEX["DPAD_RIGHT"]]
+    assert not GAMEPAD_ACTIVE_MASK[BUTTON_INDEX["LEFT_THUMB"]]
 
 
 def test_face_buttons_select_persistent_scoring_levels() -> None:

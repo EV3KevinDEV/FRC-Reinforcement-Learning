@@ -2,7 +2,7 @@
 
 The TCP wire command retains the six-value semantic robot command. Gamepad-mode
 steps additionally carry the optional 25-value NitroGen action so Unity can
-handle button-only controls such as mode toggles, auto-align, climb, and camera
+handle button-only controls such as mode toggles, auto-align, and camera
 flip without changing protocol version 1.
 
 The bridge listens only on the configured loopback address. Each TCP frame is a four-byte unsigned big-endian length followed by that many bytes of UTF-8 JSON. The maximum JSON payload is 1 MiB.
