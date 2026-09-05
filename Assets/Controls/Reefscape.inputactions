@@ -663,7 +663,7 @@
                 {
                     "name": "",
                     "id": "76a01ae1-42af-4589-9bce-17b219a6e348",
-                    "path": "<Gamepad>/dpad/right",
+                    "path": "",
                     "interactions": "",
                     "processors": "",
                     "groups": "Robot 1",
@@ -685,7 +685,7 @@
                 {
                     "name": "",
                     "id": "a23c25ad-1629-4d96-bdb3-3c4f623b9b1e",
-                    "path": "<Gamepad>/dpad/right",
+                    "path": "",
                     "interactions": "",
                     "processors": "",
                     "groups": "Robot 2",

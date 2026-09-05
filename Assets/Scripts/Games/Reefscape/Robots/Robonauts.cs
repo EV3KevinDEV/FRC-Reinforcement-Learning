@@ -277,7 +277,10 @@ namespace Games.Reefscape.Robots
                     {
                         if (coralController.HasPiece() && algaeController.HasPiece())
                         {
-                            StartCoroutine(PlaceCoroutine()); 
+                            StartCoroutine(PlaceCoroutine());
+                            // A gated/failed release must not switch the selected
+                            // piece on every physics tick while RT is held.
+                            if (!_alreadyPlaced) break;
                             switch (CurrentRobotMode)
                             {
                                 case ReefscapeRobotMode.Algae:
@@ -367,6 +370,7 @@ namespace Games.Reefscape.Robots
 
             previousSetpoint = CurrentSetpoint;
             UseSetpoint();
+            if (ExternalControlEnabled) ClearExternalPlacePulse();
         }
 
         private void SetSetpoint(RobotnautsSetpoint setpoint)
@@ -586,10 +590,12 @@ namespace Games.Reefscape.Robots
                     maxSpeed = 0.4f;
                 }
 
-                _alreadyPlaced = coralController.ReleaseGamePieceWithContinuedForce(
-                    force,
-                    time,
-                    maxSpeed);
+                // Zero-duration continued force never enters its force loop.
+                // Dropping from stow still needs the initial release impulse.
+                _alreadyPlaced = time <= 0f
+                    ? coralController.ReleaseGamePieceWithForce(force)
+                    : coralController.ReleaseGamePieceWithContinuedForce(
+                        force, time, maxSpeed);
                 return _alreadyPlaced;
             }
             else if ((CurrentRobotMode == ReefscapeRobotMode.Algae && algaeController.HasPiece()) || !coralController.HasPiece() && algaeController.HasPiece())

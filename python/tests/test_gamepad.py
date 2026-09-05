@@ -28,6 +28,33 @@ def test_nitrogen_layout_and_drive_axis_mapping() -> None:
     np.testing.assert_allclose(semantic, [0.75, -0.25, 0.5, -1.0, 0.0, -1.0])
 
 
+def test_native_unity_players_have_no_right_dpad_binding():
+    import json
+    from pathlib import Path
+
+    asset = Path(__file__).resolve().parents[2] / "Assets/Controls/Reefscape.inputactions"
+    maps = json.loads(asset.read_text(encoding="utf-8-sig"))["maps"]
+    for action_map in maps:
+        for binding in action_map["bindings"]:
+            assert "dpad/right" not in binding["path"].lower()
+
+
+def test_physical_right_dpad_press_is_not_recorded(monkeypatch):
+    import pygame
+    from mosim_rl.physical_gamepad import PhysicalGamepad
+
+    monkeypatch.setattr(pygame.event, "pump", lambda: None)
+    monkeypatch.setattr(PhysicalGamepad, "_stick_axis", lambda *a, **kw: 0.0)
+    monkeypatch.setattr(PhysicalGamepad, "_trigger_axis", lambda *a: 0.0)
+    monkeypatch.setattr(
+        PhysicalGamepad, "_button",
+        lambda self, button: float(button == pygame.CONTROLLER_BUTTON_DPAD_RIGHT),
+    )
+    raw = PhysicalGamepad().read()
+    assert raw.shape == (25,)
+    assert np.count_nonzero(raw) == 0
+
+
 def test_bound_physical_controller_buttons_are_active() -> None:
     for name in (
         "BACK",

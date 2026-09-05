@@ -136,6 +136,8 @@ namespace MoSimRL
             var previousTarget = sensorCamera.targetTexture;
             var previousAspect = sensorCamera.aspect;
             RenderTexture renderTexture = null;
+            var captureWidth = (uint)imageWidth;
+            var captureHeight = (uint)imageHeight;
             AsyncGPUReadbackRequest readback = default;
             Task<byte[]> encode = null;
             byte[] bytes = null;
@@ -152,6 +154,8 @@ namespace MoSimRL
                         RenderTextureReadWrite.sRGB);
                     sensorCamera.aspect = imageWidth / (float)imageHeight;
                     Render(sensorCamera, renderTexture);
+                    sensorCamera.targetTexture = previousTarget;
+                    sensorCamera.aspect = previousAspect;
                     // GPU readback completes over later player frames instead of
                     // blocking the Unity update that applies driver controls.
                     readback = AsyncGPUReadback.Request(
@@ -203,8 +207,6 @@ namespace MoSimRL
                         // Unity documents EncodeArrayToJPG as thread-safe. Keeping
                         // it off the player loop prevents three JPEG encodes from
                         // delaying the next controller command.
-                        var captureWidth = (uint)imageWidth;
-                        var captureHeight = (uint)imageHeight;
                         var captureQuality = Mathf.Clamp(quality, 1, 95);
                         encode = Task.Run(() => ImageConversion.EncodeArrayToJPG(
                             pixels,

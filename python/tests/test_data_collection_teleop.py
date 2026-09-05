@@ -79,6 +79,7 @@ def test_data_collection_schema_keeps_all_gamepad_and_semantic_actions() -> None
         "action": np.zeros(GAMEPAD_ACTION_DIM, dtype=np.float32),
         "action.semantic": np.zeros(6, dtype=np.float32),
         "metadata.sample": np.zeros(2, dtype=np.float32),
+        "metadata.capture": np.zeros(3, dtype=np.int64),
         "task": collector.TASK_DESCRIPTION,
     }
     for feature_name in collector.CAMERA_FEATURES.values():

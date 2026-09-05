@@ -185,6 +185,9 @@ namespace MoSimRL
     [Serializable]
     public class RlControlSnapshotDto
     {
+        public int sample_id;
+        public int unity_frame;
+        public float sim_time;
         public string session;
         public long sequence;
         public float[] action;
@@ -207,6 +210,9 @@ namespace MoSimRL
     [Serializable]
     public class RlCameraFrameDto
     {
+        public int sample_id;
+        public int unity_frame;
+        public long control_sequence;
         public string name;
         public int width;
         public int height;

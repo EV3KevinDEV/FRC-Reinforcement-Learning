@@ -425,6 +425,23 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
             raise ProtocolError(
                 f"applied semantic action has shape {semantic.shape}; expected {(6,)}"
             )
+        if not np.all(np.isfinite(semantic)) or not np.all(np.isfinite(gamepad)):
+            raise ProtocolError("applied control contained non-finite values")
+        for key in ("sample_id", "unity_frame"):
+            value = control.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ProtocolError(f"applied control {key} is invalid; rebuild Unity")
+        state_time = payload.get("state", {}).get("match", {}).get("sim_time")
+        capture_time = control.get("sim_time")
+        if (
+            isinstance(capture_time, bool)
+            or not isinstance(capture_time, (int, float))
+            or not np.isfinite(capture_time)
+            or not isinstance(state_time, (int, float))
+            or not np.isfinite(state_time)
+            or abs(capture_time - state_time) > 1e-4
+        ):
+            raise ProtocolError("applied control timestamp did not match state sim_time")
         if gamepad.shape != (GAMEPAD_ACTION_HIGH.shape[0],):
             raise ProtocolError(
                 "applied gamepad action has shape "
@@ -433,6 +450,8 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
         return {
             "control_session": session,
             "control_sequence": sequence,
+            "sample_id": control["sample_id"],
+            "unity_frame": control["unity_frame"],
             "semantic_action": semantic,
             "gamepad_action": gamepad,
         }
@@ -468,6 +487,21 @@ class MoSimEnv(gym.Env[np.ndarray, np.ndarray]):
                     f"camera {frame.name!r} sim_time {frame.sim_time} did not match "
                     f"state sim_time {state_sim_time}"
                 )
+            control = payload["control"]
+            for frame_key, control_key in (
+                ("sample_id", "sample_id"),
+                ("unity_frame", "unity_frame"),
+                ("control_sequence", "sequence"),
+            ):
+                value = raw_frame.get(frame_key)
+                if (
+                    isinstance(value, bool)
+                    or not isinstance(value, int)
+                    or value != control[control_key]
+                ):
+                    raise ProtocolError(
+                        f"camera {frame.name!r} {frame_key} did not match applied control"
+                    )
             frames[frame.name] = frame
         return frames
 

@@ -65,10 +65,12 @@ public class ReefscapeAutoAlign : AutoAlign
         // A held external bumper can arrive without its one-frame pulse being
         // observed by Update. Resolve a target here as a safe fallback.
         if ((_base.IsAutoAlignLeftPressed() || _base.IsAutoAlignRightPressed()) &&
-            closests == null)
+            (closests == null || _base.WasAutoAlignLeftTriggered() ||
+             _base.WasAutoAlignRightTriggered()))
         {
             RefreshClosestTargets();
         }
+        realOffset = offset * 0.0254f;
 
         if (PlayerPrefs.GetInt("PerspectiveAutoAlign", 1) == 1)
         {

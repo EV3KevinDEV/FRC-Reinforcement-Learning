@@ -39,6 +39,7 @@ D-pad down to both stow and climb; separating them makes both commands usable.
 Unbound and unused NitroGen outputs remain masked inactive in
 `info["gamepad_active_mask"]`. The physical-controller reader leaves the
 D-pad-Right channel at zero.
+The native Unity input asset also leaves D-pad Right unbound for both players.
 
 The adapter preserves selected levels between button presses and converts physical or policy gamepad output into the internal six-value robot command. It also sends the raw gamepad action to Unity for edge-triggered controls. `info` reports both `gamepad_action` and `semantic_action`. Observation indices `56:62` contain the executed six-value semantic command, not all 25 policy outputs.
 
@@ -61,6 +62,18 @@ the client rejects any camera whose simulation timestamp differs from the state
 timestamp. The default 156-second safety limit matches MoSim's verified full
 episode: the 150-second FRC clock, three-second auto-to-teleop pause, and
 three-second final-scoring grace.
+
+Recording additionally verifies the sample ID, Unity frame number, and applied
+control sequence shared by all three images and the control snapshot.
+`metadata.capture` retains these three IDs as exact int64 values; duplicate or
+out-of-order captures are rejected. State and image rendering are captured
+together in late `LateUpdate`, after gameplay consumes input. Action labels mean
+the command active at capture time, not the command that caused all motion since
+the preceding recorded frame. The 8 FPS videos sample the independent 50 Hz
+control stream; short presses between video frames are not a full control log.
+Video timestamps use the requested FPS. If capture falls behind, the collector
+warns about faster-than-realtime playback; `metadata.sample` retains the actual
+simulation capture times. Matching rows/images are not duplicated to fill gaps.
 
 ## Legacy semantic action
 

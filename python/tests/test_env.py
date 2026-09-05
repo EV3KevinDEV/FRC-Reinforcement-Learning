@@ -92,6 +92,9 @@ class RealtimeSampleFakeClient(FakeClient):
                 "realtime_control_sequence": 44,
             },
             "control": {
+                "sample_id": 8,
+                "unity_frame": 120,
+                "sim_time": 1.25,
                 "session": "driver-session",
                 "sequence": 44,
                 "action": applied_semantic,
@@ -107,6 +110,9 @@ class RealtimeSampleFakeClient(FakeClient):
                     "image_base64": base64.b64encode(b"aligned-jpeg").decode("ascii"),
                     "sequence": 9,
                     "sim_time": self.camera_sim_time,
+                    "sample_id": 8,
+                    "unity_frame": 120,
+                    "control_sequence": 44,
                 }
             ],
         }
@@ -272,3 +278,22 @@ def test_realtime_sample_rejects_camera_from_another_simulator_time(
         assert "did not match state sim_time" in info["error"]
     finally:
         env.close()
+
+
+@pytest.mark.parametrize("key", ["sample_id", "unity_frame", "control_sequence"])
+def test_recording_rejects_wrong_capture_even_when_timestamp_matches(raw_state, key):
+    payload = RealtimeSampleFakeClient(raw_state).finish_request()
+    payload["camera_frames"][0][key] += 1
+    from mosim_rl.protocol import ProtocolError
+
+    with pytest.raises(ProtocolError, match=key):
+        MoSimEnv._parse_synchronized_camera_frames(payload, ("front",), 1.25)
+
+
+def test_recording_rejects_action_from_different_state_time(raw_state):
+    payload = RealtimeSampleFakeClient(raw_state).finish_request()
+    payload["control"]["sim_time"] = 1.5
+    from mosim_rl.protocol import ProtocolError
+
+    with pytest.raises(ProtocolError, match="timestamp"):
+        MoSimEnv._parse_control_snapshot(payload)

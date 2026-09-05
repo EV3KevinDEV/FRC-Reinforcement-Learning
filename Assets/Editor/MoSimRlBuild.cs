@@ -76,6 +76,19 @@ public static class MoSimRlBuild
                 $"({report.summary.totalErrors} errors)");
         }
 
+        // Addressables can log a content-build failure while BuildPlayer still
+        // reports success. Such a player starts but cannot spawn robot 118.
+        var addressablesSettings = Path.Combine(
+            Path.GetDirectoryName(location) ?? ".",
+            Path.GetFileNameWithoutExtension(location) + "_Data",
+            "StreamingAssets", "aa", "settings.json");
+        if (!File.Exists(addressablesSettings))
+        {
+            throw new InvalidOperationException(
+                "MoSimulator RL build is missing its Addressables robot content. " +
+                "Check the Addressables errors in the build log and rebuild.");
+        }
+
         Debug.Log(
             $"MoSimulator RL build completed: {location} " +
             $"({report.summary.totalSize / (1024f * 1024f):F1} MiB)");

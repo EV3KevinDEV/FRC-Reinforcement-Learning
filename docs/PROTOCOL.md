@@ -41,13 +41,18 @@ The socket reader runs on a background thread. It queues raw payloads only; pars
 When realtime mode is enabled, `hello` also advertises
 `realtime_control_api: true` and `realtime_control_port`. The client sends
 versioned, session-scoped, monotonically sequenced control datagrams over UDP at
-50 Hz. Unity drains those datagrams every `Update`, ignores stale sequences, and
+50 Hz. Unity drains those datagrams before physics and gameplay updates, ignores stale sequences, and
 stops external control if the stream is absent for 250 ms.
 
 A realtime `step` may set `observe_only: true` and provide `camera_names`.
 Unity then returns one atomic sample containing state, the exact applied raw and
 semantic control plus its sequence, and all requested `camera_frames`. Every
-camera frame carries the same simulation timestamp as the state. This mode does
+camera frame carries the same simulation timestamp as the state. Control and
+camera records also share `sample_id` and `unity_frame`; cameras include
+`control_sequence` matching `control.sequence`. The client validates all of these
+before recording. Input is consumed in packet order before physics/gameplay;
+capture runs in late `LateUpdate` and freezes metadata before asynchronous JPEG
+encoding. This mode does
 not advance an artificial 20 ms step; normal realtime physics continues while
 the independent control stream remains responsive.
 

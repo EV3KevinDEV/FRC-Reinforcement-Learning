@@ -63,18 +63,19 @@ namespace MoSimRL
         private double _lastRealtimeControlAt;
         private float[] _appliedRealtimeAction;
         private float[] _appliedRealtimeGamepadAction;
+        private RlRequest _pendingSampleRequest;
+        private RobotVirtualCamera[] _pendingSampleCameras;
 
         private void Awake()
         {
             _server = new RlTcpServer(RlRuntimeSettings.Host, RlRuntimeSettings.Port);
             _server.Start();
+            gameObject.AddComponent<RlRealtimeInputPump>().Bridge = this;
             AudioListener.volume = 0f;
         }
 
         private void Update()
         {
-            ProcessRealtimeControls();
-
             if (_operationActive || !_server.TryDequeue(out var request))
             {
                 return;
@@ -201,6 +202,27 @@ namespace MoSimRL
 
         private void LateUpdate()
         {
+            if (_pendingSampleRequest != null)
+            {
+                var sampleRequest = _pendingSampleRequest;
+                var sampleCameras = _pendingSampleCameras;
+                _pendingSampleRequest = null;
+                _pendingSampleCameras = null;
+                _stepId++;
+                var samplePayload = BuildStatePayload(false);
+                if (sampleCameras.Length == 0)
+                {
+                    samplePayload.camera_frames = Array.Empty<RlCameraFrameDto>();
+                    SendSuccess(sampleRequest, samplePayload);
+                    _operationActive = false;
+                }
+                else
+                {
+                    BeginSynchronizedSample(sampleRequest, samplePayload, sampleCameras,
+                        sampleRequest.payload.jpeg_quality, samplePayload.state.match.sim_time);
+                }
+            }
+
             if (!_captureStep || _activeRequest == null)
             {
                 return;
@@ -334,25 +356,11 @@ namespace MoSimRL
                     return;
                 }
 
-                // Realtime physics and the match clock advance independently.
-                // Snapshot state, sensors, and the exact command applied at the
-                // start of this Unity update without inserting another 20 ms wait.
-                _stepId++;
-                var samplePayload = BuildStatePayload(false);
-                if (selectedCameras.Length == 0)
-                {
-                    samplePayload.camera_frames = Array.Empty<RlCameraFrameDto>();
-                    SendSuccess(request, samplePayload);
-                    return;
-                }
-
+                // Capture after gameplay Update/LateUpdate consumers, with no
+                // intervening physics between the state and camera submissions.
                 _operationActive = true;
-                BeginSynchronizedSample(
-                    request,
-                    samplePayload,
-                    selectedCameras,
-                    request.payload.jpeg_quality,
-                    samplePayload.state.match.sim_time);
+                _pendingSampleRequest = request;
+                _pendingSampleCameras = selectedCameras;
                 return;
             }
 
@@ -432,20 +440,14 @@ namespace MoSimRL
         private bool GamepadRising(float[] gamepad, int index) =>
             GamepadPressed(gamepad, index) && _previousGamepadAction[index] <= 0.5f;
 
-        private void ProcessRealtimeControls()
+        public void ProcessRealtimeControls()
         {
-            if (!RlRuntimeSettings.Realtime)
+            if (!RlRuntimeSettings.Realtime || _server == null)
             {
                 return;
             }
 
             var now = Time.realtimeSinceStartupAsDouble;
-            var pendingCommand = ExternalRobotCommand.Idle;
-            float[] pendingAction = null;
-            float[] pendingGamepad = null;
-            long pendingSequence = 0;
-            var hasPendingCommand = false;
-            var stopRequested = false;
 
             while (_server.TryDequeueRealtimeControl(out var control))
             {
@@ -469,7 +471,7 @@ namespace MoSimRL
                     _realtimeControlSession = control.session;
                     _realtimeControlSequence = 0;
                     ResetControlEdges();
-                    hasPendingCommand = false;
+                    _robot?.SetExternalCommand(ExternalRobotCommand.Idle);
                 }
                 if (control.sequence <= _realtimeControlSequence)
                 {
@@ -480,15 +482,11 @@ namespace MoSimRL
                 _lastRealtimeControlAt = now;
                 if (!control.active)
                 {
-                    _realtimeControlActive = false;
-                    stopRequested = true;
-                    hasPendingCommand = false;
-                    ResetControlEdges();
+                    StopRealtimeControl();
                     continue;
                 }
 
                 _realtimeControlActive = true;
-                stopRequested = false;
                 if (!_environmentReady || FindRobot() == null)
                 {
                     continue;
@@ -497,27 +495,15 @@ namespace MoSimRL
                 var nextCommand = BuildExternalCommand(
                     control.action,
                     control.gamepad_action);
-                if (hasPendingCommand)
-                {
-                    MergeControlPulses(ref nextCommand, pendingCommand);
-                }
-                pendingCommand = nextCommand;
-                pendingAction = (float[])control.action.Clone();
-                pendingGamepad = (float[])control.gamepad_action.Clone();
-                pendingSequence = control.sequence;
-                hasPendingCommand = true;
-            }
-
-            if (hasPendingCommand)
-            {
-                _robot.SetExternalCommand(pendingCommand);
-                _appliedRealtimeAction = pendingAction;
-                _appliedRealtimeGamepadAction = pendingGamepad;
-                _appliedRealtimeControlSequence = pendingSequence;
-            }
-            else if (stopRequested)
-            {
-                StopRealtimeControl();
+                // Consume discrete events in packet order instead of OR-merging
+                // taps (which loses toggle parity and target-selection history).
+                // RT survives a following neutral packet until physics consumes it.
+                nextCommand.PlacePulse |= _robot.ExternalCommand.PlacePulse;
+                _robot.SetExternalCommand(nextCommand);
+                _robot.ApplyExternalInputsNow();
+                _appliedRealtimeAction = (float[])control.action.Clone();
+                _appliedRealtimeGamepadAction = (float[])control.gamepad_action.Clone();
+                _appliedRealtimeControlSequence = control.sequence;
             }
 
             if (_realtimeControlActive &&
@@ -525,20 +511,6 @@ namespace MoSimRL
             {
                 StopRealtimeControl();
             }
-        }
-
-        private static void MergeControlPulses(
-            ref ExternalRobotCommand destination,
-            ExternalRobotCommand source)
-        {
-            destination.PlacePulse |= source.PlacePulse;
-            destination.TargetSelectionPulse |= source.TargetSelectionPulse;
-            destination.RobotModeTogglePulse |= source.RobotModeTogglePulse;
-            destination.IntakeModeTogglePulse |= source.IntakeModeTogglePulse;
-            destination.ClimbPulse |= source.ClimbPulse;
-            destination.CameraFlipPulse |= source.CameraFlipPulse;
-            destination.AutoAlignLeftPulse |= source.AutoAlignLeftPulse;
-            destination.AutoAlignRightPulse |= source.AutoAlignRightPulse;
         }
 
         private void StopRealtimeControl()
@@ -611,6 +583,9 @@ namespace MoSimRL
                     {
                         session = _realtimeControlSession,
                         sequence = _appliedRealtimeControlSequence,
+                        sample_id = _stepId,
+                        unity_frame = Time.frameCount,
+                        sim_time = state.match.sim_time,
                         action = (float[])_appliedRealtimeAction.Clone(),
                         gamepad_action = (float[])_appliedRealtimeGamepadAction.Clone()
                     }
@@ -958,6 +933,18 @@ namespace MoSimRL
             {
                 var resultIndex = index;
                 var camera = cameras[index];
+                // Freeze metadata when rendering is submitted, not after the
+                // asynchronous readback/encoder completes on a later frame.
+                var frame = new RlCameraFrameDto
+                {
+                    name = camera.CameraId,
+                    width = camera.ImageWidth,
+                    height = camera.ImageHeight,
+                    sim_time = sampleSimTime,
+                    sample_id = payload.control?.sample_id ?? _stepId,
+                    unity_frame = Time.frameCount,
+                    control_sequence = payload.control?.sequence ?? 0
+                };
                 StartCoroutine(camera.CaptureJpegAsync(
                     jpegQuality,
                     jpeg =>
@@ -968,15 +955,9 @@ namespace MoSimRL
                         }
                         else
                         {
-                            frames[resultIndex] = new RlCameraFrameDto
-                            {
-                                name = camera.CameraId,
-                                width = camera.ImageWidth,
-                                height = camera.ImageHeight,
-                                image_base64 = Convert.ToBase64String(jpeg),
-                                sequence = camera.CaptureSequence,
-                                sim_time = sampleSimTime
-                            };
+                            frame.image_base64 = Convert.ToBase64String(jpeg);
+                            frame.sequence = camera.CaptureSequence;
+                            frames[resultIndex] = frame;
                         }
                         CompleteOne();
                     },

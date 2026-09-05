@@ -292,6 +292,13 @@ namespace Games.Reefscape.Robots
             HandleRumble();
         }
 
+        public void ApplyExternalInputsNow()
+        {
+            if (!ExternalControlEnabled) return;
+            base.Update();
+            ApplyExternalControl();
+        }
+
         private void ApplyExternalControl()
         {
             var targetSelected = ConsumeExternalTargetSelection();

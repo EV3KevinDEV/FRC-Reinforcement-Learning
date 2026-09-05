@@ -358,6 +358,11 @@ def build_features(
             "shape": (2,),
             "names": ["sim_time_seconds", "control_udp_sequence"],
         },
+        "metadata.capture": {
+            "dtype": "int64",
+            "shape": (3,),
+            "names": ["sample_id", "unity_frame", "control_udp_sequence"],
+        },
     }
 
     for camera_name, feature_name in CAMERA_FEATURES.items():
@@ -487,6 +492,8 @@ def main() -> None:
                 gamepad.reset()
 
             reset_requested = False
+            previous_capture = None
+            first_capture_time = None
             next_sample_at = time.monotonic()
             for _ in range(max_steps):
                 wait_seconds = next_sample_at - time.monotonic()
@@ -517,6 +524,15 @@ def main() -> None:
                     )
                 if info.get("control_session") != requested.session:
                     raise RuntimeError("Unity returned a controller sample from another session")
+                capture = (info["sample_id"], info["unity_frame"], info["sim_time"])
+                if previous_capture is not None and any(
+                    current <= previous
+                    for current, previous in zip(capture, previous_capture, strict=True)
+                ):
+                    raise RuntimeError("Duplicate or out-of-order recording capture")
+                previous_capture = capture
+                if first_capture_time is None:
+                    first_capture_time = capture[2]
 
                 # Unity returns the exact command that was active when it sampled
                 # state and rendered all cameras. It may be newer than `requested`
@@ -553,6 +569,10 @@ def main() -> None:
                             [info["sim_time"], info["control_sequence"]],
                             dtype=np.float32,
                         ),
+                        "metadata.capture": np.asarray(
+                            [info["sample_id"], info["unity_frame"], info["control_sequence"]],
+                            dtype=np.int64,
+                        ),
                         "task": args.task,
                         **capture_images(frames, cameras),
                     }
@@ -574,6 +594,16 @@ def main() -> None:
 
             episode_saved = buffered_frame_count(dataset) > 0
             if episode_saved:
+                frame_count = buffered_frame_count(dataset)
+                if frame_count > 1 and previous_capture is not None:
+                    capture_fps = (frame_count - 1) / (previous_capture[2] - first_capture_time)
+                    if capture_fps < args.dataset_fps * 0.9:
+                        print(
+                            f"Warning: actual capture rate was {capture_fps:.1f} FPS "
+                            f"(requested {args.dataset_fps}). Frames/actions/states remain "
+                            "aligned, but fixed-FPS video playback is faster than real time. "
+                            "Use metadata.sample sim_time for actual capture timing."
+                        )
                 dataset.save_episode()
                 print(f"Saved episode {episode_index}")
                 episode_index += 1
